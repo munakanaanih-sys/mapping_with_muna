@@ -385,73 +385,98 @@ const PROMPTS = {
 function parseMD(text){
   if(!text||!text.trim()) return null;
 
-  // ── STEP 1: join wrapped lines ──
-  // AI sometimes wraps long cell content across multiple lines.
-  // We rejoin lines that don't start a new row (no leading | or digit pattern).
-  const rawLines = text.split('\n');
-  const joined = [];
-  for(const line of rawLines){
-    const trimmed = line.trim();
-    if(!trimmed) continue;
-    // A "real" table row starts with | or with content before the first |
-    const isRow = trimmed.startsWith('|') || trimmed.includes('|');
-    const isSep = /^[\|\-\s:]+$/.test(trimmed);
-    if(isRow || isSep){
-      joined.push(trimmed);
-    } else if(joined.length>0){
-      // continuation of previous cell — append to last line
-      joined[joined.length-1] += ' ' + trimmed;
+  // ── Phase 1: Normalise line endings ──
+  const raw = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+
+  // ── Phase 2: Reconstruct table lines ──
+  // Strategy: a "table line" is any line that contains "|"
+  // Lines without "|" that follow a table line are cell continuations
+  const lines = raw.split('\n');
+  const tableLines = [];
+  for(const line of lines){
+    const t2 = line.trim();
+    if(!t2) continue;
+    if(t2.includes('|')){
+      tableLines.push(t2);
+    } else if(tableLines.length > 0){
+      // Append as continuation to previous line
+      tableLines[tableLines.length-1] += ' ' + t2;
     }
   }
 
-  // ── STEP 2: filter to pipe-containing rows only ──
-  const rows = joined.filter(r=>r.includes('|'));
-  if(rows.length<2) return null;
+  if(tableLines.length < 2) return null;
 
-  // ── STEP 3: find header row and skip separator ──
-  // Skip the first row (header) and any separator rows
-  const data=[];
-  for(let i=1;i<rows.length;i++){
-    const r=rows[i];
-    // skip separator rows like |---|---|
-    if(/^[\|\-\s:]+$/.test(r)) continue;
-
-    // split on | and clean up
-    const cells=r.split('|').map(c=>c.trim()).filter((c,j,a)=>j>0&&j<a.length-1);
-    if(cells.length<3) continue;
-
-    // find the last numeric cell — that's always the score
-    let maxIdx=-1;
-    for(let k=cells.length-1;k>=0;k--){
-      const v=parseFloat(cells[k].replace(/[^\d.]/g,''));
-      if(!isNaN(v)&&v>0&&v<=100){maxIdx=k;break;}
-    }
-    if(maxIdx<0) continue; // no valid score found
-
-    const maxVal=parseFloat(cells[maxIdx].replace(/[^\d.]/g,''))||0;
-
-    // now assign columns based on how many we have
-    const n=maxIdx; // number of non-score columns
-    let section='', qNum='', bloomSkill='', contentSkill='';
-
-    if(n>=4){
-      // 5-col: section | qNum | bloom | content | score
-      section=cells[0]; qNum=cells[1]; bloomSkill=cells[2]; contentSkill=cells[3];
-    } else if(n===3){
-      // 4-col: section | qNum | skill | score
-      section=cells[0]; qNum=cells[1]; bloomSkill=''; contentSkill=cells[2];
-    } else if(n===2){
-      section=cells[0]; qNum=cells[1]; bloomSkill=''; contentSkill='';
-    } else if(n===1){
-      section=''; qNum=cells[0]; bloomSkill=''; contentSkill='';
-    }
-
-    // skip header-like rows (no digit in qNum and not a data row)
-    if(!maxVal && !section && !qNum) continue;
-
-    data.push({section, qNum, bloomSkill, contentSkill, max:maxVal});
+  // ── Phase 3: Split each line into cells ──
+  // Handle both "| a | b |" and "a | b | c" formats
+  function splitRow(line){
+    // Remove optional leading/trailing |
+    const stripped = line.replace(/^\|/, '').replace(/\|$/, '');
+    return stripped.split('|').map(c => c.trim());
   }
-  return data.length>0?data:null;
+
+  // ── Phase 4: Detect & skip separator rows (|---|---|) ──
+  function isSeparator(line){
+    return /^[\|\-\s:=]+$/.test(line);
+  }
+
+  // ── Phase 5: Find header row index (first non-separator row) ──
+  let headerIdx = -1;
+  for(let i=0; i<tableLines.length; i++){
+    if(!isSeparator(tableLines[i])){ headerIdx = i; break; }
+  }
+  if(headerIdx < 0) return null;
+
+  // ── Phase 6: Parse data rows ──
+  const data = [];
+  for(let i = headerIdx+1; i < tableLines.length; i++){
+    const row = tableLines[i];
+    if(isSeparator(row)) continue;
+
+    const cells = splitRow(row);
+    if(cells.length < 2) continue;
+
+    // Find the rightmost cell that is a valid score (number 1-100)
+    // We scan from right to left
+    let scoreIdx = -1;
+    let scoreVal = 0;
+    for(let k = cells.length-1; k >= 0; k--){
+      const raw2 = cells[k].replace(/[^\d.]/g,'');
+      if(!raw2) continue;
+      const v = parseFloat(raw2);
+      if(!isNaN(v) && v > 0 && v <= 100){
+        scoreIdx = k;
+        scoreVal = v;
+        break;
+      }
+    }
+
+    // If no numeric score found, skip this row
+    // BUT — if we have at least 2 cells and the last cell is empty or a label,
+    // try assigning score = 0 so the row still shows in preview
+    if(scoreIdx < 0){
+      // Last attempt: any number anywhere
+      for(let k=0; k<cells.length; k++){
+        const raw2 = cells[k].replace(/[^\d.]/g,'');
+        if(raw2){ const v=parseFloat(raw2); if(!isNaN(v)&&v>=0&&v<=100){scoreIdx=k;scoreVal=v;break;} }
+      }
+      if(scoreIdx < 0) continue;
+    }
+
+    // Assign columns based on position relative to score
+    // Columns before score: [section?, qNum?, bloom?, content?]
+    const pre = cells.slice(0, scoreIdx);
+    const section      = pre[0] || '';
+    const qNum         = pre[1] || '';
+    const bloomSkill   = pre[2] || '';
+    const contentSkill = pre[3] || '';
+
+    // Skip rows where all meaningful fields are empty (likely a stray line)
+    if(!section && !qNum && !bloomSkill && !contentSkill && !scoreVal) continue;
+
+    data.push({ section, qNum, bloomSkill, contentSkill, max: scoreVal });
+  }
+
+  return data.length > 0 ? data : null;
 }
 
 function parseScores(raw){
@@ -669,10 +694,44 @@ function doExportPDF(){
   doc.html(el,{callback:d=>d.save('intervention_plan.pdf'),x:8,y:8,width:194,windowWidth:820,autoPaging:'text'});
 }
 
+
+/* ── Custom Modal (replaces browser alert) ── */
+const Modal=({msg,onClose})=>{
+  if(!msg) return null;
+  return(
+    <div style={{
+      position:'fixed',inset:0,zIndex:9999,
+      background:'rgba(0,0,0,.55)',backdropFilter:'blur(4px)',
+      display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'
+    }} onClick={onClose}>
+      <div style={{
+        background:'white',borderRadius:'20px',padding:'32px 28px',
+        maxWidth:'480px',width:'100%',
+        boxShadow:'0 20px 60px rgba(0,0,0,.35)',
+        position:'relative'
+      }} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:'2rem',textAlign:'center',marginBottom:'12px'}}>⚠️</div>
+        <div style={{
+          fontSize:'1rem',color:'#374151',lineHeight:'1.8',
+          whiteSpace:'pre-wrap',direction:'auto',textAlign:'center'
+        }}>{msg}</div>
+        <button onClick={onClose} style={{
+          marginTop:'24px',width:'100%',padding:'13px',
+          borderRadius:'14px',border:'none',cursor:'pointer',
+          background:'linear-gradient(135deg,#1e3a5f,#0f2749)',
+          color:'white',fontWeight:700,fontSize:'1rem',
+          fontFamily:"'Cairo',sans-serif"
+        }}>OK</button>
+      </div>
+    </div>
+  );
+};
+
 /* ══ MAIN APP ══ */
 const App=()=>{
   const dr=ld();
   const [lang,setLang]=useState(dr.lang||null);
+  const [modalMsg,setModalMsg]=useState(null);
   const [subject,setSubject]=useState(dr.subject||null);
   const [phase,setPhase]=useState(dr.phase||0);
   const [teacher,setTeacher]=useState(dr.teacher||{name:'',grade:'',date:''});
@@ -757,12 +816,11 @@ const App=()=>{
   const generateExcel=()=>{
     const data=parseMD(tableRaw);
     if(!data){
-      // Show detailed help
       const msg = t.badTable + '\n\n' + (
         t.badTableHelp ||
         'Example format:\n| Section | Q | Bloom Skill | Content Skill | Score |\n|---|---|---|---|---|\n| A | 1 | Understand | Reading | 10 |'
       );
-      alert(msg);
+      setModalMsg(msg);
       return;
     }
     setParsedQ(data);
@@ -787,7 +845,7 @@ const App=()=>{
 
   const analyzeData=()=>{
     const scores=parseScores(gradesRaw);
-    if(!scores.length){alert(t.noData);return;}
+    if(!scores.length){setModalMsg(t.noData);return;}
     const dist=buildDist(scores);
     setAnalytics({scores,distribution:dist,totalStudents:scores.length,average:avg(scores)});
     setPhase(3);handleSave();
@@ -795,7 +853,7 @@ const App=()=>{
 
   const doCompare=()=>{
     const sc=parseScores(compareRaw);
-    if(!sc.length){alert(t.noData);return;}
+    if(!sc.length){setModalMsg(t.noData);return;}
     setCompareAna({scores:sc,distribution:buildDist(sc),totalStudents:sc.length,average:avg(sc)});
   };
 
@@ -817,6 +875,8 @@ const App=()=>{
 
   /* ═══ SPLASH ═══ */
   if(!lang) return(
+    <>
+    <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-lg w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
         <SiteHeader t={UI.ar}/>
@@ -832,10 +892,13 @@ const App=()=>{
         </div>
       </div>
     </div>
+    </>
   );
 
   /* ═══ SUBJECT PICK ═══ */
   if(!subject) return(
+    <>
+    <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
     <div className="min-h-screen flex items-center justify-center p-4" dir={dir}>
       <div className="max-w-2xl w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
         <SiteHeader t={t}/>
@@ -851,10 +914,13 @@ const App=()=>{
         </div>
       </div>
     </div>
+    </>
   );
 
   /* ═══ WORKFLOW ═══ */
   return(
+    <>
+    <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
     <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%)'}} dir={dir}>
       <div style={{maxWidth:'900px',margin:'0 auto',background:'rgba(255,255,255,.97)',boxShadow:'0 4px 40px rgba(0,0,0,.15)',borderRadius:'0 0 24px 24px',minHeight:'100vh'}}>
         <MiniHeader t={t}/>
@@ -889,7 +955,7 @@ const App=()=>{
                   🔄 {t.pickSubject}
                 </button>
                 <button onClick={()=>{
-                  if(!teacher.name||!teacher.grade||!teacher.date){alert(t.fillAll);return;}
+                  if(!teacher.name||!teacher.grade||!teacher.date){setModalMsg(t.fillAll);return;}
                   setPhase(2);handleSave();
                 }} className="glow-orange bg-gradient-to-r from-orange-500 to-amber-400 text-white font-bold px-8 py-3 rounded-full cursor-pointer">
                   {t.next} {dir==='rtl'?'←':'→'}
@@ -1094,6 +1160,7 @@ const App=()=>{
         </div>
       </div>
     </div>
+    </>
   );
 };
 
