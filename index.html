@@ -180,6 +180,11 @@ const UI = {
     qWord:"\u0633\u0624\u0627\u0644",
     subjects:{arabic:"\u0639\u0631\u0628\u064a", hebrew:"\u0639\u0628\u0631\u064a", english:"\u0627\u0646\u062c\u0644\u064a\u0632\u064a", math:"\u0631\u064a\u0627\u0636\u064a\u0627\u062a", science:"\u0639\u0644\u0648\u0645"},
     langBtns:{ar:"\u0627\u0644\u0639\u0631\u0628\u064a\u0629", he:"\u0627\u0644\u0639\u0628\u0631\u064a\u0629", en:"\u0627\u0644\u0627\u0646\u062c\u0644\u064a\u0632\u064a\u0629"},
+    draftFound:    "\u064a\u0648\u062c\u062f \u0644\u062f\u064a\u0643 \u062c\u0644\u0633\u0629 \u0645\u062d\u0641\u0648\u0638\u0629",
+    draftSub:      "\u0647\u0644 \u062a\u0631\u064a\u062f \u0627\u0633\u062a\u0643\u0645\u0627\u0644 \u0627\u0644\u0639\u0645\u0644 \u0623\u0645 \u0627\u0644\u0628\u062f\u0621 \u0645\u0646 \u062c\u062f\u064a\u062f\u061f",
+    draftContinue: "\u0627\u0633\u062a\u0643\u0645\u0627\u0644 \u0627\u0644\u062c\u0644\u0633\u0629",
+    draftNew:      "\u0628\u062f\u0621 \u062c\u062f\u064a\u062f",
+    draftInfo:     "\u0627\u0644\u0635\u0641: %1 \u2014 %2 \u2014 %3",
     fillAll:"\u064a\u0631\u062c\u0649 \u062a\u0639\u0628\u0626\u0629 \u062c\u0645\u064a\u0639 \u0627\u0644\u062d\u0642\u0648\u0644",
     badTableHelp:"\u062a\u0623\u0643\u062f \u0645\u0646 \u0623\u0646 \u0627\u0644\u062c\u062f\u0648\u0644 \u064a\u062d\u062a\u0648\u064a \u0639\u0644\u0649 \u0623\u0639\u0645\u062f\u0629 \u0645\u0641\u0635\u0648\u0644\u0629 \u0628\u0640 | \u0648\u0623\u0646 \u0643\u0644 \u0635\u0641 \u064a\u0628\u062f\u0623 \u0628\u0640 |. \u0645\u062b\u0627\u0644:\n| \u0642\u0633\u0645 | \u0633\u0624\u0627\u0644 | \u0645\u0647\u0627\u0631\u0629 \u0628\u0644\u0648\u0645 | \u0645\u062d\u062a\u0648\u0649 | \u0639\u0644\u0627\u0645\u0629 |\n|---|---|---|---|---|\n| \u0623 | 1 | \u0641\u0647\u0645 | \u0642\u0631\u0627\u0621\u0629 | 10 |",
     noData:"\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0623\u0631\u0642\u0627\u0645. \u062a\u0623\u0643\u062f \u0645\u0646 \u0644\u0635\u0642 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0644\u0641 \u0628\u0634\u0643\u0644 \u0635\u062d\u064a\u062d.",
@@ -264,6 +269,11 @@ const UI = {
     qWord:"\u05e9\u05d0\u05dc\u05d5\u05ea",
     subjects:{arabic:"\u05e2\u05e8\u05d1\u05d9\u05ea", hebrew:"\u05e2\u05d1\u05e8\u05d9\u05ea", english:"\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea", math:"\u05de\u05ea\u05de\u05d8\u05d9\u05e7\u05d4", science:"\u05de\u05d3\u05e2\u05d9\u05dd"},
     langBtns:{ar:"\u05e2\u05e8\u05d1\u05d9\u05ea", he:"\u05e2\u05d1\u05e8\u05d9\u05ea", en:"\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea"},
+    draftFound:    "\u05e0\u05de\u05e6\u05d0\u05d4 \u05d8\u05d9\u05d5\u05d8\u05d4 \u05e9\u05de\u05d5\u05e8\u05d4",
+    draftSub:      "\u05d4\u05d0\u05dd \u05dc\u05d4\u05de\u05e9\u05d9\u05da \u05d0\u05d5 \u05dc\u05d4\u05ea\u05d7\u05d9\u05dc \u05de\u05d7\u05d3\u05e9?",
+    draftContinue: "\u05d4\u05de\u05e9\u05da",
+    draftNew:      "\u05d4\u05ea\u05d7\u05dc\u05d4 \u05d7\u05d3\u05e9\u05d4",
+    draftInfo:     "\u05db\u05d9\u05ea\u05d4: %1 \u2014 %2 \u2014 %3",
     fillAll:"\u05d0\u05e0\u05d0 \u05de\u05dc\u05d0 \u05d0\u05ea \u05db\u05dc \u05d4\u05e9\u05d3\u05d5\u05ea",
     noData:"\u05dc\u05d0 \u05e0\u05de\u05e6\u05d0\u05d5 \u05de\u05e1\u05e4\u05e8\u05d9\u05dd. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05d3\u05d1\u05e7\u05ea \u05e0\u05ea\u05d5\u05e0\u05d9 \u05d4\u05e7\u05d5\u05d1\u05e5 \u05d1\u05e6\u05d5\u05e8\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4.",
     badTable:"\u05d0\u05e0\u05d0 \u05d4\u05d3\u05d1\u05e7 \u05d8\u05d1\u05dc\u05d4 \u05d1\u05e4\u05d5\u05e8\u05de\u05d8 Markdown \u05e0\u05db\u05d5\u05df."
@@ -347,6 +357,11 @@ const UI = {
     qWord:"questions",
     subjects:{arabic:"Arabic", hebrew:"Hebrew", english:"English", math:"Math", science:"Science"},
     langBtns:{ar:"Arabic", he:"Hebrew", en:"English"},
+    draftFound:    "Saved session found",
+    draftSub:      "Would you like to continue where you left off, or start fresh?",
+    draftContinue: "Continue session",
+    draftNew:      "Start fresh",
+    draftInfo:     "Class: %1 — %2 — %3",
     fillAll:"Please fill all fields",
     noData:"No numbers found. Make sure to paste the file data correctly.",
     badTable:"Please paste a valid Markdown table."
@@ -727,19 +742,55 @@ const Modal=({msg,onClose})=>{
   );
 };
 
+
+/* ── Draft Prompt Screen ── */
+const DraftPrompt=({t,draft,onContinue,onFresh,dir})=>{
+  const sub   = draft?.subject ? (SUBJECT_META[draft.subject]?.icon||'') : '';
+  const grade = draft?.teacher?.grade || '';
+  const date  = draft?.teacher?.date  || '';
+  const name  = draft?.teacher?.name  || '';
+  const info  = (t.draftInfo||'')
+    .replace('%1', grade)
+    .replace('%2', sub + ' ' + (draft?.subjects?.[draft?.subject]||''))
+    .replace('%3', date);
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:8888,background:'rgba(0,0,0,.55)',backdropFilter:'blur(6px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} dir={dir}>
+      <div className="fade-in" style={{background:'white',borderRadius:'24px',padding:'36px 28px',maxWidth:'420px',width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,.35)',textAlign:'center'}}>
+        <div style={{fontSize:'3rem',marginBottom:'12px'}}>💾</div>
+        <h2 style={{fontSize:'1.3rem',fontWeight:900,color:'#1e3a5f',marginBottom:'8px'}}>{t.draftFound}</h2>
+        <p style={{color:'#6b7280',fontSize:'.9rem',marginBottom:'6px'}}>{t.draftSub}</p>
+        {name && <div style={{background:'#f1f5f9',borderRadius:'12px',padding:'10px 16px',margin:'14px 0',fontSize:'.85rem',fontWeight:600,color:'#374151'}}>
+          👤 {name}<br/>
+          <span style={{color:'#6b7280',fontWeight:400}}>{grade} {date?'· '+date:''}</span>
+        </div>}
+        <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'18px'}}>
+          <button onClick={onContinue} style={{padding:'14px',borderRadius:'14px',border:'none',cursor:'pointer',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',fontFamily:"'Cairo',sans-serif",boxShadow:'0 4px 16px rgba(15,39,73,.3)'}}>
+            ▶ {t.draftContinue}
+          </button>
+          <button onClick={onFresh} style={{padding:'14px',borderRadius:'14px',border:'2px solid #e5e7eb',cursor:'pointer',background:'white',color:'#374151',fontWeight:700,fontSize:'1rem',fontFamily:"'Cairo',sans-serif"}}>
+            ✨ {t.draftNew}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ══ MAIN APP ══ */
 const App=()=>{
-  const dr=ld();
-  const [lang,setLang]=useState(dr.lang||null);
+  // Draft is NEVER loaded automatically — only when user explicitly chooses
+  const [lang,setLang]=useState(null);
   const [modalMsg,setModalMsg]=useState(null);
-  const [subject,setSubject]=useState(dr.subject||null);
-  const [phase,setPhase]=useState(dr.phase||0);
-  const [teacher,setTeacher]=useState(dr.teacher||{name:'',grade:'',date:''});
-  const [tableRaw,setTableRaw]=useState(dr.tableRaw||'');
-  const [parsedQ,setParsedQ]=useState(dr.parsedQ||[]);
-  const [gradesRaw,setGradesRaw]=useState(dr.gradesRaw||'');
-  const [analytics,setAnalytics]=useState(dr.analytics||null);
-  const [plan,setPlan]=useState(dr.plan||{resources:'',period:'',hours:'',assessment:'',reEvalDate:''});
+  const [showDraftPrompt,setShowDraftPrompt]=useState(false);
+  const [draftData,setDraftData]=useState(null);
+  const [subject,setSubject]=useState(null);
+  const [phase,setPhase]=useState(0);
+  const [teacher,setTeacher]=useState({name:'',grade:'',date:''});
+  const [tableRaw,setTableRaw]=useState('');
+  const [parsedQ,setParsedQ]=useState([]);
+  const [gradesRaw,setGradesRaw]=useState('');
+  const [analytics,setAnalytics]=useState(null);
+  const [plan,setPlan]=useState({resources:'',period:'',hours:'',assessment:'',reEvalDate:''});
   const [showPlan,setShowPlan]=useState(false);
   const [savedMsg,setSavedMsg]=useState(false);
   const [showCompare,setShowCompare]=useState(false);
@@ -754,6 +805,35 @@ const App=()=>{
   const t=UI[lang||'ar'];
   const dir=(lang==='ar'||lang==='he')?'rtl':'ltr';
   const sm=subject?SUBJECT_META[subject]:null;
+
+  // ── Draft handlers ──
+  const handleContinueDraft=()=>{
+    if(!draftData) return;
+    const d=draftData;
+    if(d.lang)      setLang(d.lang);
+    if(d.subject)   setSubject(d.subject);
+    if(d.phase)     setPhase(d.phase);
+    if(d.teacher)   setTeacher(d.teacher);
+    if(d.tableRaw)  setTableRaw(d.tableRaw);
+    if(d.parsedQ)   setParsedQ(d.parsedQ);
+    if(d.gradesRaw) setGradesRaw(d.gradesRaw);
+    if(d.analytics) setAnalytics(d.analytics);
+    if(d.plan)      setPlan(d.plan);
+    setShowDraftPrompt(false);
+    setDraftData(null);
+  };
+
+  const handleFreshStart=()=>{
+    // Clear saved draft completely
+    try{localStorage.removeItem(KEY);}catch{}
+    setTeacher({name:'',grade:'',date:''});
+    setSubject(null); setPhase(0);
+    setTableRaw(''); setParsedQ([]);
+    setGradesRaw(''); setAnalytics(null);
+    setPlan({resources:'',period:'',hours:'',assessment:'',reEvalDate:''});
+    setShowDraftPrompt(false);
+    setDraftData(null);
+  };
 
   const handleSave=()=>{
     sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan});
@@ -778,11 +858,19 @@ const App=()=>{
       {label||t.back}
     </button>
   );
+  const hasDraft=()=>{try{const k=localStorage.getItem(KEY);return !!(k&&JSON.parse(k)?.teacher?.name);}catch{return false;}};
   const SaveBtn=()=>(
-    <button onClick={handleSave}
-      className="no-print" style={{padding:"10px 20px",borderRadius:"12px",border:"2px solid",borderColor:savedMsg?"#4ade80":"#d1d5db",color:savedMsg?"#16a34a":"#6b7280",background:savedMsg?"#f0fdf4":"white",fontWeight:700,fontSize:"1rem",cursor:"pointer"}}>
-      {savedMsg?`\u2713 ${t.saved}`:t.save}
-    </button>
+    <div className="no-print" style={{display:'flex',gap:'8px',alignItems:'center'}}>
+      <button onClick={handleSave}
+        style={{padding:"10px 20px",borderRadius:"12px",border:"2px solid",borderColor:savedMsg?"#4ade80":"#d1d5db",color:savedMsg?"#16a34a":"#6b7280",background:savedMsg?"#f0fdf4":"white",fontWeight:700,fontSize:"1rem",cursor:"pointer",transition:'all .2s'}}>
+        {savedMsg?`✓ ${t.saved}`:t.save}
+      </button>
+      {hasDraft()&&<button onClick={()=>{try{localStorage.removeItem(KEY);}catch{}setModalMsg(t.draftCleared||'✔ تم محو المسودة');}}
+        title={t.clearDraft||'محو المسودة'}
+        style={{padding:"10px 14px",borderRadius:"12px",border:"2px solid #fecaca",color:"#dc2626",background:"#fff5f5",fontWeight:700,fontSize:".9rem",cursor:"pointer"}}>
+        🗑
+      </button>}
+    </div>
   );
 
   useEffect(()=>{
@@ -877,6 +965,7 @@ const App=()=>{
   if(!lang) return(
     <>
     <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
+    {showDraftPrompt && draftData && <DraftPrompt t={t} draft={draftData} onContinue={handleContinueDraft} onFresh={handleFreshStart} dir={dir}/>}
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-lg w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
         <SiteHeader t={UI.ar}/>
@@ -884,7 +973,14 @@ const App=()=>{
           <p className="text-gray-600 font-semibold mb-6 text-base">{UI.ar.splashLabel} / {UI.he.splashLabel} / {UI.en.splashLabel}</p>
           <div className="flex gap-3">
             {[['ar',UI.ar.langBtns.ar,'#3b82f6'],['he',UI.he.langBtns.he,'#8b5cf6'],['en',UI.en.langBtns.en,'#f59e0b']].map(([l,lbl,c])=>(
-              <button key={l} onClick={()=>setLang(l)}
+              <button key={l} onClick={()=>{
+                const saved=ld();
+                setLang(l);
+                if(saved&&saved.teacher&&saved.teacher.name){
+                  setDraftData(saved);
+                  setShowDraftPrompt(true);
+                }
+              }}
                 className="flex-1 py-4 rounded-2xl text-white font-bold text-lg shadow-lg hover:opacity-90 transition cursor-pointer"
                 style={{background:`linear-gradient(135deg,${c},${c}bb)`}}>{lbl}</button>
             ))}
