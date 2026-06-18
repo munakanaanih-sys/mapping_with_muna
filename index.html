@@ -39,15 +39,16 @@ body{background:linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%);min-
 .step-line{flex:1;height:2px;transition:all .3s;}
 .subject-card{border:2px solid #e5e7eb;border-radius:20px;padding:18px 14px;cursor:pointer;transition:all .25s;text-align:center;background:white;}
 .subject-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,.1);}
-.copy-btn{padding:6px 14px;border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;border:none;display:inline-flex;align-items:center;gap:5px;}
-.copy-idle{background:#f1f5f9;color:#475569;}
-.copy-done{background:#dcfce7;color:#16a34a;}
-.site-header{background:linear-gradient(135deg,#1e3a5f 0%,#0f2749 60%,#162040 100%);padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:14px;position:relative;overflow:hidden;}
+.copy-btn{padding:10px 22px;border-radius:12px;font-size:.88rem;font-weight:800;cursor:pointer;transition:all .2s;border:none;display:inline-flex;align-items:center;gap:7px;letter-spacing:.3px;}
+.copy-idle{background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;box-shadow:0 4px 14px rgba(249,115,22,.4);}
+.copy-idle:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(249,115,22,.55);}
+.copy-done{background:linear-gradient(135deg,#10b981,#34d399);color:#fff;box-shadow:0 4px 14px rgba(16,185,129,.4);}
+.site-header{background:linear-gradient(135deg,#1e3a5f 0%,#0f2749 60%,#162040 100%);padding:28px 24px 24px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
 .site-header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 50%,rgba(249,115,22,.15),transparent 60%),radial-gradient(circle at 70% 50%,rgba(59,130,246,.12),transparent 60%);}
-.sh-logo{width:68px;height:68px;border-radius:14px;object-fit:cover;border:2px solid rgba(255,255,255,.2);box-shadow:0 4px 20px rgba(0,0,0,.3);flex-shrink:0;position:relative;z-index:1;}
+.sh-logo{width:80px;height:80px;border-radius:18px;object-fit:cover;border:2px solid rgba(255,255,255,.2);box-shadow:0 6px 24px rgba(0,0,0,.35);flex-shrink:0;position:relative;z-index:1;display:block;}
 .sh-text{position:relative;z-index:1;text-align:center;}
-.sh-title{font-size:1.45rem;font-weight:900;color:#fff;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.3);}
-.sh-sub{font-size:.88rem;font-weight:700;color:#fbbf24;margin-top:5px;}
+.sh-title{font-size:1.55rem;font-weight:900;color:#fff;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.3);}
+.sh-sub{font-size:.9rem;font-weight:700;color:#fbbf24;margin-top:6px;}
 .mini-header{background:linear-gradient(135deg,#1e3a5f,#0f2749);padding:14px 28px;display:flex;align-items:center;gap:14px;margin-bottom:28px;}
 .mh-logo{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1.5px solid rgba(255,255,255,.25);flex-shrink:0;}
 .mh-title{font-size:1.05rem;font-weight:900;color:#fff;line-height:1.15;}
@@ -518,12 +519,11 @@ const sd=(o)=>{try{localStorage.setItem(KEY,JSON.stringify(o));}catch{}};
 
 const SiteHeader=({t})=>(
   <div className="site-header">
-    <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'}/>
     <div className="sh-text">
+      <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'} style={{margin:'0 auto 10px'}}/>
       <div className="sh-title">{t.mainTitle}</div>
       <div className="sh-sub">{t.mainSub}</div>
     </div>
-    <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'}/>
   </div>
 );
 
@@ -966,26 +966,98 @@ const App=()=>{
     <>
     <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
     {showDraftPrompt && draftData && <DraftPrompt t={t} draft={draftData} onContinue={handleContinueDraft} onFresh={handleFreshStart} dir={dir}/>}
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-lg w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
-        <SiteHeader t={UI.ar}/>
-        <div className="p-8 text-center">
-          <p className="text-gray-600 font-semibold mb-6 text-base">{UI.ar.splashLabel} / {UI.he.splashLabel} / {UI.en.splashLabel}</p>
-          <div className="flex gap-3">
-            {[['ar',UI.ar.langBtns.ar,'#3b82f6'],['he',UI.he.langBtns.he,'#8b5cf6'],['en',UI.en.langBtns.en,'#f59e0b']].map(([l,lbl,c])=>(
-              <button key={l} onClick={()=>{
-                const saved=ld();
-                setLang(l);
-                if(saved&&saved.teacher&&saved.teacher.name){
-                  setDraftData(saved);
-                  setShowDraftPrompt(true);
-                }
-              }}
-                className="flex-1 py-4 rounded-2xl text-white font-bold text-lg shadow-lg hover:opacity-90 transition cursor-pointer"
-                style={{background:`linear-gradient(135deg,${c},${c}bb)`}}>{lbl}</button>
-            ))}
-          </div>
+    <div style={{
+      minHeight:'100vh',
+      background:'linear-gradient(145deg,#0f2749 0%,#1e3a5f 40%,#1a4060 70%,#0f2749 100%)',
+      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+      padding:'32px 20px',
+      position:'relative',overflow:'hidden'
+    }}>
+      {/* Decorative blobs */}
+      <div style={{position:'absolute',top:'-80px',right:'-80px',width:'400px',height:'400px',borderRadius:'50%',background:'radial-gradient(circle,rgba(249,115,22,.18),transparent 70%)',pointerEvents:'none'}}/>
+      <div style={{position:'absolute',bottom:'-100px',left:'-100px',width:'500px',height:'500px',borderRadius:'50%',background:'radial-gradient(circle,rgba(59,130,246,.15),transparent 70%)',pointerEvents:'none'}}/>
+      <div style={{position:'absolute',top:'40%',left:'5%',width:'200px',height:'200px',borderRadius:'50%',background:'radial-gradient(circle,rgba(139,92,246,.12),transparent 70%)',pointerEvents:'none'}}/>
+
+      {/* Logo + title */}
+      <div className="fade-in" style={{textAlign:'center',marginBottom:'48px',position:'relative',zIndex:1}}>
+        <div style={{
+          width:'110px',height:'110px',borderRadius:'28px',
+          background:'linear-gradient(135deg,rgba(255,255,255,.15),rgba(255,255,255,.05))',
+          border:'2px solid rgba(255,255,255,.25)',
+          boxShadow:'0 12px 40px rgba(0,0,0,.4)',
+          display:'flex',alignItems:'center',justifyContent:'center',
+          margin:'0 auto 22px',overflow:'hidden'
+        }}>
+          <img src={LOGO} alt="logo" style={{width:'90px',height:'90px',borderRadius:'20px',objectFit:'cover'}} onError={e=>e.target.style.display='none'}/>
         </div>
+        <h1 style={{fontSize:'clamp(1.6rem,4vw,2.4rem)',fontWeight:900,color:'#fff',textShadow:'0 2px 16px rgba(0,0,0,.4)',marginBottom:'10px',lineHeight:1.2}}>
+          {UI.ar.mainTitle}
+        </h1>
+        <p style={{fontSize:'1rem',fontWeight:700,color:'#fbbf24',letterSpacing:'.5px'}}>
+          {UI.ar.mainSub}
+        </p>
+        <div style={{
+          display:'inline-block',marginTop:'18px',
+          padding:'10px 24px',borderRadius:'50px',
+          background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',
+          color:'rgba(255,255,255,.8)',fontSize:'.85rem',fontWeight:600
+        }}>
+          🎓 مركزة تقييم — منى مصطفى
+        </div>
+      </div>
+
+      {/* Welcome card */}
+      <div className="fade-in" style={{
+        background:'rgba(255,255,255,.06)',
+        backdropFilter:'blur(12px)',
+        border:'1px solid rgba(255,255,255,.15)',
+        borderRadius:'28px',
+        padding:'40px 48px',
+        maxWidth:'600px',width:'100%',
+        textAlign:'center',
+        position:'relative',zIndex:1,
+        boxShadow:'0 24px 64px rgba(0,0,0,.3)'
+      }}>
+        <p style={{color:'rgba(255,255,255,.75)',fontWeight:600,fontSize:'1rem',marginBottom:'36px',lineHeight:1.7}}>
+          {UI.ar.splashLabel} &nbsp;/&nbsp; {UI.he.splashLabel} &nbsp;/&nbsp; {UI.en.splashLabel}
+        </p>
+        <div style={{display:'flex',gap:'20px',justifyContent:'center',flexWrap:'wrap'}}>
+          {[
+            ['ar', UI.ar.langBtns.ar, 'linear-gradient(135deg,#3b82f6,#1d4ed8)', '🇸🇦', 'العربية'],
+            ['he', UI.he.langBtns.he, 'linear-gradient(135deg,#8b5cf6,#6d28d9)', '⭐', 'עברית'],
+            ['en', UI.en.langBtns.en, 'linear-gradient(135deg,#f59e0b,#d97706)', '🌐', 'English']
+          ].map(([l,lbl,bg,flag,sub])=>(
+            <button key={l} onClick={()=>{
+              const saved=ld();
+              setLang(l);
+              if(saved&&saved.teacher&&saved.teacher.name){
+                setDraftData(saved);
+                setShowDraftPrompt(true);
+              }
+            }}
+            style={{
+              flex:'1',minWidth:'140px',maxWidth:'180px',
+              padding:'20px 16px',borderRadius:'20px',
+              background:bg,
+              color:'white',fontWeight:800,fontSize:'1.05rem',
+              border:'none',cursor:'pointer',
+              boxShadow:'0 8px 24px rgba(0,0,0,.35)',
+              transition:'all .25s',
+              display:'flex',flexDirection:'column',alignItems:'center',gap:'8px',
+              fontFamily:"'Cairo',sans-serif"
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow='0 16px 36px rgba(0,0,0,.45)';}}
+            onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,.35)';}}>
+              <span style={{fontSize:'1.6rem'}}>{flag}</span>
+              <span>{lbl}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom decorative line */}
+      <div style={{marginTop:'40px',color:'rgba(255,255,255,.3)',fontSize:'.78rem',fontWeight:600,position:'relative',zIndex:1}}>
+        ✦ &nbsp; منصة ومضات ذكية &nbsp; ✦
       </div>
     </div>
     </>
@@ -995,8 +1067,8 @@ const App=()=>{
   if(!subject) return(
     <>
     <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
-    <div className="min-h-screen flex items-center justify-center p-4" dir={dir}>
-      <div className="max-w-2xl w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
+    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%)'}} dir={dir}>
+      <div style={{maxWidth:'900px',margin:'0 auto',background:'rgba(255,255,255,.97)',boxShadow:'0 4px 40px rgba(0,0,0,.15)',minHeight:'100vh'}}>
         <SiteHeader t={t}/>
         <div className="p-8">
           <button onClick={()=>setLang(null)} className="no-print" style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'10px 22px',borderRadius:'14px',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(15,39,73,.35)',marginBottom:'20px'}}>
@@ -1074,11 +1146,31 @@ const App=()=>{
                 </div>
                 <pre className="bg-white border rounded-xl p-4 text-sm font-mono text-gray-700 whitespace-pre-wrap select-all"
                   style={{borderColor:sm.border,direction:'ltr',textAlign:'left'}}>{promptText}</pre>
-                <div className="mt-3 flex flex-wrap gap-2 items-center">
-                  <span className="text-xs text-gray-500 font-semibold">{t.aiTools}</span>
-                  {[['ChatGPT','https://chat.openai.com'],['Claude','https://claude.ai'],['Gemini','https://gemini.google.com'],['Copilot','https://copilot.microsoft.com']].map(([n,u])=>(
-                    <a key={n} href={u} target="_blank" className="text-xs px-2 py-1 rounded-lg bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 transition font-medium">{n} ↗</a>
-                  ))}
+                <div className="mt-4">
+                  <span style={{display:'block',fontSize:'.9rem',fontWeight:700,color:'#374151',marginBottom:'12px'}}>{t.aiTools}</span>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'12px'}}>
+                    {[
+                      ['ChatGPT','https://chat.openai.com','#10a37f','#fff','⚡'],
+                      ['Claude','https://claude.ai','#d97706','#fff','🔮'],
+                      ['Gemini','https://gemini.google.com','#4285f4','#fff','✨'],
+                      ['Copilot','https://copilot.microsoft.com','#0078d4','#fff','🚀']
+                    ].map(([n,u,bg,fg,icon])=>(
+                      <a key={n} href={u} target="_blank" style={{
+                        display:'inline-flex',alignItems:'center',gap:'8px',
+                        padding:'10px 20px',borderRadius:'14px',
+                        background:bg,color:fg,
+                        fontWeight:700,fontSize:'.9rem',
+                        textDecoration:'none',
+                        boxShadow:`0 4px 16px ${bg}55`,
+                        transition:'all .22s',
+                        fontFamily:"'Cairo',sans-serif"
+                      }}
+                      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow=`0 10px 28px ${bg}77`;}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow=`0 4px 16px ${bg}55`;}}>
+                        <span>{icon}</span> {n} <span style={{opacity:.75,fontSize:'.75rem'}}>↗</span>
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div>
