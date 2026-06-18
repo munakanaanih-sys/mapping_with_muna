@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ومضات ذكية مع منى مصطفى</title>
+<script>
+  // Suppress Babel in-browser warning from console display
+  const _origWarn = console.warn;
+  console.warn = (...args) => {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('Babel')) return;
+    _origWarn.apply(console, args);
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%);min-height:100vh;font-family:'Cairo',sans-serif;}
+.fade-in{animation:fadeIn .4s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.glow-orange{box-shadow:0 4px 20px rgba(249,115,22,.35);transition:all .25s;}
+.glow-orange:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(249,115,22,.55);}
+.glow-teal{box-shadow:0 4px 20px rgba(20,184,166,.35);transition:all .25s;}
+.glow-teal:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(20,184,166,.55);}
+.glow-purple{box-shadow:0 4px 20px rgba(139,92,246,.35);transition:all .25s;}
+.glow-purple:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(139,92,246,.55);}
+.glow-blue{box-shadow:0 4px 20px rgba(59,130,246,.35);transition:all .25s;}
+.glow-blue:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(59,130,246,.55);}
+.step-dot{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.88rem;transition:all .3s;}
+.step-line{flex:1;height:2px;transition:all .3s;}
+.subject-card{border:2px solid #e5e7eb;border-radius:20px;padding:18px 14px;cursor:pointer;transition:all .25s;text-align:center;background:white;}
+.subject-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,.1);}
+.copy-btn{padding:6px 14px;border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;border:none;display:inline-flex;align-items:center;gap:5px;}
+.copy-idle{background:#f1f5f9;color:#475569;}
+.copy-done{background:#dcfce7;color:#16a34a;}
+.site-header{background:linear-gradient(135deg,#1e3a5f 0%,#0f2749 60%,#162040 100%);padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:14px;position:relative;overflow:hidden;}
+.site-header::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 50%,rgba(249,115,22,.15),transparent 60%),radial-gradient(circle at 70% 50%,rgba(59,130,246,.12),transparent 60%);}
+.sh-logo{width:68px;height:68px;border-radius:14px;object-fit:cover;border:2px solid rgba(255,255,255,.2);box-shadow:0 4px 20px rgba(0,0,0,.3);flex-shrink:0;position:relative;z-index:1;}
+.sh-text{position:relative;z-index:1;text-align:center;}
+.sh-title{font-size:1.45rem;font-weight:900;color:#fff;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.3);}
+.sh-sub{font-size:.88rem;font-weight:700;color:#fbbf24;margin-top:5px;}
+.mini-header{background:linear-gradient(135deg,#1e3a5f,#0f2749);padding:14px 28px;display:flex;align-items:center;gap:14px;margin-bottom:28px;}
+.mh-logo{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1.5px solid rgba(255,255,255,.25);flex-shrink:0;}
+.mh-title{font-size:1.05rem;font-weight:900;color:#fff;line-height:1.15;}
+.mh-sub{font-size:.8rem;font-weight:700;color:#fbbf24;}
+.preview-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+.preview-table th,.preview-table td{border:1px solid #e5e7eb;padding:6px 10px;text-align:center;}
+.preview-table thead{background:#f1f5f9;}
+.motiv-banner{border-radius:14px;padding:12px 18px;text-align:center;font-weight:700;font-size:.9rem;margin-bottom:4px;}
+textarea{resize:vertical;font-family:'Cairo',sans-serif;}
+input,select{font-family:'Cairo',sans-serif;}
+@media print{
+  .no-print{display:none!important;}
+  body{background:white;}
+  .print-ok{box-shadow:none!important;border:1px solid #e5e7eb!important;}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── safe clipboard copy (works on HTTP too) ── */
+function safeCopy(text, cb) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(cb).catch(() => fallback(text, cb));
+  } else {
+    fallback(text, cb);
+  }
+}
+function fallback(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); cb(); } catch(e){}
+  document.body.removeChild(ta);
+}
+
+/* ── constants ── */
+const LOGO = "https://i.postimg.cc/SNgVgv8L/my-new-icon.png";
+
+const SUBJECT_META = {
+  arabic:  {icon:"📖",color:"#3b82f6",bg:"#eff6ff",border:"#bfdbfe"},
+  hebrew:  {icon:"\u2721\uFE0F", color:"#8b5cf6",bg:"#f5f3ff",border:"#ddd6fe"},
+  english: {icon:"🌐",color:"#059669",bg:"#ecfdf5",border:"#a7f3d0"},
+  math:    {icon:"📐",color:"#f59e0b",bg:"#fffbeb",border:"#fde68a"},
+  science: {icon:"🔬",color:"#ef4444",bg:"#fef2f2",border:"#fecaca"}
+};
+
+/* ── UI strings — every key is PURE single language, zero mixing ── */
+const UI = {
+  ar: {
+    mainTitle: "\u0648\u0645\u0636\u0627\u062a \u0630\u0643\u064a\u0629 \u0645\u0639 \u0645\u0646\u0649 \u0645\u0635\u0637\u0641\u0649",
+    mainSub:   "\u0627\u0644\u0645\u0646\u0635\u0629 \u0627\u0644\u0630\u0643\u064a\u0629 \u0644\u0644\u0645\u0633\u0648\u062d\u0627\u062a \u0627\u0644\u0635\u0641\u064a\u0629",
+    pickLang:  "\u0627\u062e\u062a\u0631 \u0644\u063a\u0629 \u0627\u0644\u0648\u0627\u062c\u0647\u0629",
+    splashLabel: "\u0627\u062e\u062a\u0631 \u0644\u063a\u062a\u0643",
+    pickSubject:"\u0627\u062e\u062a\u0631 \u0627\u0644\u0645\u0627\u062f\u0629 \u0627\u0644\u062f\u0631\u0627\u0633\u064a\u0629",
+    subjectHint:"\u0633\u064a\u062a\u0645 \u062a\u062e\u0635\u064a\u0635 \u0627\u0644\u0628\u0631\u0648\u0645\u0628\u062a \u0648\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u062d\u0633\u0628 \u0627\u0644\u0645\u0627\u062f\u0629",
+    back:"\u0631\u062c\u0648\u0639", save:"\u062d\u0641\u0638 \u0627\u0644\u0645\u0633\u0648\u062f\u0629", saved:"\u062a\u0645 \u0627\u0644\u062d\u0641\u0638",
+    next:"\u0627\u0644\u062a\u0627\u0644\u064a",
+    step1:"\u0645\u0639\u0644\u0648\u0645\u0627\u062a", step2:"\u0647\u064a\u0643\u0644 \u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646", step3:"\u0631\u0635\u062f \u0627\u0644\u0639\u0644\u0627\u0645\u0627\u062a", step4:"\u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0648\u0627\u0644\u062e\u0637\u0629",
+    teacherName:"\u0627\u0633\u0645 \u0627\u0644\u0645\u0639\u0644\u0645 / \u0627\u0644\u0645\u0639\u0644\u0645\u0629",
+    gradeLabel:"\u0627\u0644\u0635\u0641 / \u0627\u0644\u0634\u0639\u0628\u0629",
+    examDate:"\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646",
+    subjectLabel:"\u0627\u0644\u0645\u0627\u062f\u0629",
+    promptTitle:"\u0628\u0631\u0648\u0645\u0628\u062a \u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646",
+    promptDesc:"\u0627\u0646\u0633\u062e \u0647\u0630\u0627 \u0627\u0644\u0628\u0631\u0648\u0645\u0628\u062a \u0648\u0623\u0644\u0635\u0642\u0647 \u0641\u064a \u0623\u062f\u0627\u0629 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a \u0645\u0639 \u0635\u0648\u0631\u0629 \u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646:",
+    copyPrompt:"\u0646\u0633\u062e \u0627\u0644\u0628\u0631\u0648\u0645\u0628\u062a", copied:"\u062a\u0645 \u0627\u0644\u0646\u0633\u062e",
+    aiTools:"\u0623\u062f\u0648\u0627\u062a \u0630\u0643\u0627\u0621 \u0627\u0635\u0637\u0646\u0627\u0639\u064a \u0645\u062c\u0627\u0646\u064a\u0629:",
+    pasteTable:"\u0627\u0644\u0635\u0642 \u062c\u062f\u0648\u0644 \u0627\u0644\u0627\u0633\u0626\u0644\u0629 \u0627\u0644\u0646\u0627\u062a\u062c",
+    pasteTableHint:"\u0627\u0644\u0635\u0642 \u0627\u0644\u062c\u062f\u0648\u0644 \u0628\u062a\u0646\u0633\u064a\u0642 Markdown...",
+    previewTitle:"\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u062c\u062f\u0648\u0644",
+    previewHint:"\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0642\u0628\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0644\u0641",
+    generateExcel:"\u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 \u0627\u0644\u0645\u0633\u062d \u0627\u0644\u0635\u0641\u064a",
+    excelOk:"\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0644\u0641! \u0627\u0641\u062a\u062d\u0647\u060c \u0623\u062f\u062e\u0644 \u0639\u0644\u0627\u0645\u0627\u062a \u0627\u0644\u0637\u0644\u0627\u0628\u060c \u062b\u0645 \u0627\u0646\u0633\u062e \u0627\u0644\u0635\u0641\u0648\u0641 \u0647\u0646\u0627.",
+    pasteData:"\u0627\u0644\u0635\u0642 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0637\u0644\u0627\u0628 \u0645\u0646 \u0627\u0644\u0645\u0644\u0641",
+    pasteDataHint:"\u0628\u0639\u062f \u0631\u0635\u062f \u0627\u0644\u0639\u0644\u0627\u0645\u0627\u062a\u060c \u062d\u062f\u062f \u0635\u0641\u0648\u0641 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u0627\u0644\u0635\u0642\u0647\u0627 \u0647\u0646\u0627...",
+    analyzeBtn:"\u062a\u062d\u0644\u064a\u0644 \u0627\u0644\u0646\u062a\u0627\u0626\u062c",
+    dist:"\u062a\u0648\u0632\u064a\u0639 \u0645\u0633\u062a\u0648\u064a\u0627\u062a \u0627\u0644\u0637\u0644\u0627\u0628",
+    range:"\u0646\u0637\u0627\u0642", count:"\u0627\u0644\u0637\u0644\u0627\u0628", pct:"\u0627\u0644\u0646\u0633\u0628\u0629",
+    avgLabel:"\u0645\u062a\u0648\u0633\u0637 \u0627\u0644\u0635\u0641",
+    interventionTitle:"\u0628\u0646\u0627\u0621 \u062e\u0637\u0629 \u0627\u0644\u062a\u062f\u062e\u0644",
+    resources:"\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0645\u062a\u0627\u062d\u0629",
+    resourcesHint:"\u0645\u062b\u0627\u0644: \u0645\u0639\u0644\u0645 \u0645\u0633\u0627\u0639\u062f\u060c \u0645\u0646\u0635\u0629 \u0631\u0642\u0645\u064a\u0629\u060c \u0633\u0627\u0639\u0627\u062a \u062f\u0639\u0645 \u0641\u0631\u062f\u064a...",
+    period:"\u0641\u062a\u0631\u0629 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u062e\u0637\u0629",
+    periodHint:"\u0645\u062b\u0627\u0644: 3 \u0623\u0633\u0627\u0628\u064a\u0639 \u2014 1/11 \u0625\u0644\u0649 22/11",
+    hours:"\u0633\u0627\u0639\u0627\u062a \u0623\u0633\u0628\u0648\u0639\u064a\u0629 \u0644\u0643\u0644 \u0645\u062c\u0645\u0648\u0639\u0629",
+    hoursHint:"\u0645\u062b\u0627\u0644: \u0633\u0627\u0639\u062a\u0627\u0646 \u0644\u0644\u0645\u062c\u0645\u0648\u0639\u0629 \u0627\u0644\u0645\u0643\u062b\u0641\u0629",
+    assessment:"\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
+    assessmentHint:"\u0645\u062b\u0627\u0644: \u0645\u0647\u0645\u0629 \u062a\u0637\u0628\u064a\u0642\u064a\u0629 + \u0627\u0645\u062a\u062d\u0627\u0646 \u0642\u0635\u064a\u0631",
+    reEval:"\u0645\u0648\u0639\u062f \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0641\u062d\u0635",
+    generatePlan:"\u0625\u0635\u062f\u0627\u0631 \u062e\u0637\u0629 \u0627\u0644\u062a\u062f\u062e\u0644",
+    downloadDocx:"Word \u062a\u062d\u0645\u064a\u0644",
+    downloadPdf:"PDF \u062a\u062d\u0645\u064a\u0644",
+    print:"\u0637\u0628\u0627\u0639\u0629",
+    planTitle:"\u062a\u0642\u0631\u064a\u0631 \u062e\u0637\u0629 \u0627\u0644\u062a\u062f\u062e\u0644 \u0648\u0627\u0644\u062f\u0639\u0645",
+    distSection:"\u0627\u0644\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u062a\u062d\u0635\u064a\u0644\u064a",
+    totalStudents:"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0637\u0644\u0627\u0628",
+    intensive:"\u0645\u062c\u0645\u0648\u0639\u0629 \u0627\u0644\u062a\u062f\u062e\u0644 \u0627\u0644\u0645\u0643\u062b\u0641 (0-40)",
+    strategic:"\u0645\u062c\u0645\u0648\u0639\u0629 \u0627\u0644\u062f\u0639\u0645 \u0627\u0644\u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a (40-60)",
+    timeframe:"\u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u0632\u0645\u0646\u064a \u0648\u0627\u0644\u062a\u0642\u064a\u064a\u0645",
+    workPeriod:"\u0641\u062a\u0631\u0629 \u0627\u0644\u0639\u0645\u0644",
+    weeklyHours:"\u0627\u0644\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064a\u0629",
+    evalMethod:"\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u0641\u062d\u0635",
+    reEvalDate:"\u0645\u0648\u0639\u062f \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
+    availableRes:"\u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0645\u062a\u0627\u062d\u0629",
+    strategiesTitle:"\u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a\u0627\u062a \u0627\u0644\u062a\u062f\u062e\u0644 \u0627\u0644\u062a\u0631\u0628\u0648\u064a",
+    groupTarget:"\u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629",
+    strategy:"\u0627\u0644\u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a\u0629",
+    intensiveGroup:"\u062a\u062f\u062e\u0644 \u0645\u0643\u062b\u0641",
+    strategicGroup:"\u062f\u0639\u0645 \u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a",
+    enrichGroup:"\u0625\u062b\u0631\u0627\u0621 \u0648\u0645\u0646\u0627\u0641\u0633\u0629",
+    intensiveStr:"\u0645\u062c\u0645\u0648\u0639\u0627\u062a \u0635\u063a\u064a\u0631\u0629 \u0645\u0646\u0641\u0635\u0644\u0629 (Pull-out). \u062a\u0631\u0643\u064a\u0632 \u0639\u0644\u0649 \u0641\u0643 \u0631\u0645\u0648\u0632 \u0627\u0644\u0645\u0647\u0627\u0631\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064a\u0629. \u0646\u0645\u0630\u062c\u0629 \u0645\u0628\u0627\u0634\u0631\u0629 \u0645\u0639 \u0645\u062a\u0627\u0628\u0639\u0629 \u0641\u0631\u062f\u064a\u0629.",
+    strategicStr:"\u0623\u0648\u0631\u0627\u0642 \u0639\u0645\u0644 \u0645\u0648\u062c\u0647\u0629\u060c \u062a\u0639\u0644\u0645 \u0630\u0627\u062a\u064a \u0639\u0628\u0631 \u0627\u0644\u0645\u0646\u0635\u0627\u062a \u0627\u0644\u0631\u0642\u0645\u064a\u0629\u060c \u062a\u0639\u0644\u0645 \u0628\u0627\u0644\u0623\u0642\u0631\u0627\u0646.",
+    enrichStr:"\u0645\u0647\u0627\u0645 \u062a\u0641\u0643\u064a\u0631 \u0639\u0644\u064a\u0627 \u0648\u0645\u0634\u0627\u0631\u064a\u0639 \u0627\u0633\u062a\u0643\u0634\u0627\u0641\u064a\u0629 \u0645\u0633\u062a\u0642\u0644\u0629 \u0644\u0644\u062d\u0641\u0627\u0638 \u0639\u0644\u0649 \u0627\u0644\u062a\u0645\u064a\u0632 \u0627\u0644\u0623\u0643\u0627\u062f\u064a\u0645\u064a.",
+    notSet:"\u0644\u0645 \u064a\u064f\u062d\u062f\u062f",
+    motivHigh:"\u0631\u0627\u0626\u0639! \u0623\u062f\u0627\u0621 \u0627\u0644\u0635\u0641 \u0645\u0645\u062a\u0627\u0632\u060c \u0627\u0633\u062a\u0645\u0631 \u0641\u064a \u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u0627\u0631.",
+    motivMid:"\u0623\u062f\u0627\u0621 \u062c\u064a\u062f \u0645\u0639 \u0641\u0631\u0635\u0629 \u0644\u0644\u062a\u062d\u0633\u064a\u0646. \u062e\u0637\u0629 \u0627\u0644\u062a\u062f\u062e\u0644 \u0633\u062a\u062d\u062f\u062b \u0641\u0627\u0631\u0642\u0627\u064b \u0643\u0628\u064a\u0631\u0627\u064b.",
+    motivLow:"\u0644\u0627 \u062a\u0642\u0644\u0642! \u0643\u0644 \u0637\u0627\u0644\u0628 \u064a\u0645\u0643\u0646\u0647 \u0627\u0644\u062a\u0642\u062f\u0645. \u0627\u0644\u062e\u0637\u0629 \u0627\u0644\u0635\u062d\u064a\u062d\u0629 \u0633\u062a\u063a\u064a\u0631 \u0627\u0644\u0646\u062a\u0627\u0626\u062c.",
+    compareBtn:"\u0645\u0642\u0627\u0631\u0646\u0629 \u0645\u0639 \u0627\u0645\u062a\u062d\u0627\u0646 \u0622\u062e\u0631",
+    compareHint:"\u0627\u0644\u0635\u0642 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646 \u0627\u0644\u062b\u0627\u0646\u064a \u0647\u0646\u0627...",
+    compareTitle:"\u0645\u0642\u0627\u0631\u0646\u0629 \u0646\u062a\u0627\u0626\u062c \u0627\u0645\u062a\u062d\u0627\u0646\u064a\u0646",
+    exam1:"\u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646 \u0627\u0644\u0623\u0648\u0644", exam2:"\u0627\u0644\u0627\u0645\u062a\u062d\u0627\u0646 \u0627\u0644\u062b\u0627\u0646\u064a",
+    exportList:"\u062a\u0635\u062f\u064a\u0631 \u0642\u0648\u0627\u0626\u0645 \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0627\u062a",
+    listInt:"\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062a\u062f\u062e\u0644 \u0627\u0644\u0645\u0643\u062b\u0641",
+    listStr:"\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062f\u0639\u0645 \u0627\u0644\u0627\u0633\u062a\u0631\u0627\u062a\u064a\u062c\u064a",
+    listEnr:"\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0625\u062b\u0631\u0627\u0621",
+    qWord:"\u0633\u0624\u0627\u0644",
+    subjects:{arabic:"\u0639\u0631\u0628\u064a", hebrew:"\u0639\u0628\u0631\u064a", english:"\u0627\u0646\u062c\u0644\u064a\u0632\u064a", math:"\u0631\u064a\u0627\u0636\u064a\u0627\u062a", science:"\u0639\u0644\u0648\u0645"},
+    langBtns:{ar:"\u0627\u0644\u0639\u0631\u0628\u064a\u0629", he:"\u0627\u0644\u0639\u0628\u0631\u064a\u0629", en:"\u0627\u0644\u0627\u0646\u062c\u0644\u064a\u0632\u064a\u0629"},
+    fillAll:"\u064a\u0631\u062c\u0649 \u062a\u0639\u0628\u0626\u0629 \u062c\u0645\u064a\u0639 \u0627\u0644\u062d\u0642\u0648\u0644",
+    badTableHelp:"\u062a\u0623\u0643\u062f \u0645\u0646 \u0623\u0646 \u0627\u0644\u062c\u062f\u0648\u0644 \u064a\u062d\u062a\u0648\u064a \u0639\u0644\u0649 \u0623\u0639\u0645\u062f\u0629 \u0645\u0641\u0635\u0648\u0644\u0629 \u0628\u0640 | \u0648\u0623\u0646 \u0643\u0644 \u0635\u0641 \u064a\u0628\u062f\u0623 \u0628\u0640 |. \u0645\u062b\u0627\u0644:\n| \u0642\u0633\u0645 | \u0633\u0624\u0627\u0644 | \u0645\u0647\u0627\u0631\u0629 \u0628\u0644\u0648\u0645 | \u0645\u062d\u062a\u0648\u0649 | \u0639\u0644\u0627\u0645\u0629 |\n|---|---|---|---|---|\n| \u0623 | 1 | \u0641\u0647\u0645 | \u0642\u0631\u0627\u0621\u0629 | 10 |",
+    noData:"\u0644\u0645 \u064a\u064f\u0639\u062b\u0631 \u0639\u0644\u0649 \u0623\u0631\u0642\u0627\u0645. \u062a\u0623\u0643\u062f \u0645\u0646 \u0644\u0635\u0642 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0644\u0641 \u0628\u0634\u0643\u0644 \u0635\u062d\u064a\u062d.",
+    badTable:"\u064a\u0631\u062c\u0649 \u0644\u0635\u0642 \u0627\u0644\u062c\u062f\u0648\u0644 \u0628\u062a\u0646\u0633\u064a\u0642 Markdown \u0635\u062d\u064a\u062d."
+  },
+  he: {
+    mainTitle: "\u05d1\u05e8\u05e7\u05d9\u05dd \u05d7\u05db\u05de\u05d9\u05dd \u05e2\u05dd \u05de\u05e0\u05d0 \u05de\u05d5\u05e1\u05d8\u05e4\u05d0",
+    mainSub:   "\u05d4\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4 \u05d4\u05d7\u05db\u05de\u05d4 \u05dc\u05de\u05d9\u05e4\u05d5\u05d9 \u05db\u05d9\u05ea\u05ea\u05d9",
+    pickLang:  "\u05d1\u05d7\u05e8 \u05e9\u05e4\u05ea \u05de\u05de\u05e9\u05e7",
+    splashLabel:"\u05d1\u05d7\u05e8 \u05e9\u05e4\u05ea\u05da",
+    pickSubject:"\u05d1\u05d7\u05e8 \u05de\u05e7\u05e6\u05d5\u05e2",
+    subjectHint:"\u05d4\u05d4\u05e0\u05d7\u05d9\u05d5\u05ea \u05d5\u05d4\u05d3\u05d5\u05d7\u05d5\u05ea \u05d9\u05d5\u05ea\u05d0\u05de\u05d5 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05dc\u05e4\u05d9 \u05d4\u05de\u05e7\u05e6\u05d5\u05e2",
+    back:"\u05d7\u05d6\u05e8\u05d4", save:"\u05e9\u05de\u05d5\u05e8 \u05d8\u05d9\u05d5\u05d8\u05d4", saved:"\u05e0\u05e9\u05de\u05e8",
+    next:"\u05d4\u05d1\u05d0",
+    step1:"\u05e4\u05e8\u05d8\u05d9\u05dd", step2:"\u05de\u05d1\u05e0\u05d4 \u05de\u05d1\u05d7\u05df", step3:"\u05d4\u05d6\u05e0\u05ea \u05e6\u05d9\u05d5\u05e0\u05d9\u05dd", step4:"\u05e0\u05d9\u05ea\u05d5\u05d7 \u05d5\u05ea\u05d5\u05db\u05e0\u05d9\u05ea",
+    teacherName:"\u05e9\u05dd \u05d4\u05de\u05d5\u05e8\u05d4",
+    gradeLabel:"\u05db\u05d9\u05ea\u05d4 / \u05e7\u05d1\u05d5\u05e6\u05d4",
+    examDate:"\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05de\u05d1\u05d7\u05df",
+    subjectLabel:"\u05de\u05e7\u05e6\u05d5\u05e2",
+    promptTitle:"\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05dc\u05e0\u05d9\u05ea\u05d5\u05d7 \u05de\u05d1\u05d7\u05df",
+    promptDesc:"\u05d4\u05e2\u05ea\u05e7 \u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d6\u05d4 \u05d5\u05d4\u05d3\u05d1\u05e7 \u05d1\u05db\u05dc\u05d9 AI \u05d9\u05d7\u05d3 \u05e2\u05dd \u05ea\u05de\u05d5\u05e0\u05d4 \u05e9\u05dc \u05d4\u05de\u05d1\u05d7\u05df:",
+    copyPrompt:"\u05d4\u05e2\u05ea\u05e7 \u05e4\u05e8\u05d5\u05de\u05e4\u05d8", copied:"\u05d4\u05d5\u05e2\u05ea\u05e7",
+    aiTools:"\u05db\u05dc\u05d9 AI \u05d7\u05d9\u05e0\u05de\u05d9\u05d9\u05dd:",
+    pasteTable:"\u05d4\u05d3\u05d1\u05e7 \u05d0\u05ea \u05d4\u05d8\u05d1\u05dc\u05d4 \u05e9\u05e0\u05d5\u05e6\u05e8\u05d4",
+    pasteTableHint:"\u05d4\u05d3\u05d1\u05e7 \u05d8\u05d1\u05dc\u05ea Markdown \u05e9\u05e0\u05d5\u05e6\u05e8\u05d4 \u05e2\u05dc \u05d9\u05d3\u05d9 \u05d4-AI...",
+    previewTitle:"\u05ea\u05e6\u05d5\u05d2\u05d4 \u05de\u05e7\u05d3\u05d9\u05de\u05d9\u05ea",
+    previewHint:"\u05d1\u05d3\u05d5\u05e7 \u05d0\u05ea \u05d4\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05dc\u05e4\u05e0\u05d9 \u05d9\u05e6\u05d9\u05e8\u05ea \u05d4\u05e7\u05d5\u05d1\u05e5",
+    generateExcel:"\u05e6\u05d5\u05e8 \u05e7\u05d5\u05d1\u05e5 \u05de\u05d9\u05e4\u05d5\u05d9 \u05db\u05d9\u05ea\u05ea\u05d9",
+    excelOk:"\u05d4\u05e7\u05d5\u05d1\u05e5 \u05e0\u05d5\u05e6\u05e8! \u05e4\u05ea\u05d7 \u05d0\u05d5\u05ea\u05d5\u002c \u05d4\u05d6\u05df \u05e6\u05d9\u05d5\u05e0\u05d9\u05dd\u002c \u05d5\u05d0\u05d6 \u05d4\u05e2\u05ea\u05e7 \u05d0\u05ea \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea \u05dc\u05db\u05d0\u05df.",
+    pasteData:"\u05d4\u05d3\u05d1\u05e7 \u05e0\u05ea\u05d5\u05e0\u05d9 \u05ea\u05dc\u05de\u05d9\u05d3\u05d9\u05dd \u05de\u05d4\u05e7\u05d5\u05d1\u05e5",
+    pasteDataHint:"\u05dc\u05d0\u05d7\u05e8 \u05d4\u05d6\u05e0\u05ea \u05d4\u05e6\u05d9\u05d5\u05e0\u05d9\u05dd\u002c \u05d4\u05e2\u05ea\u05e7 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea \u05d4\u05ea\u05dc\u05de\u05d9\u05d3\u05d9\u05dd \u05d5\u05d4\u05d3\u05d1\u05e7 \u05db\u05d0\u05df...",
+    analyzeBtn:"\u05e0\u05ea\u05d7 \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea",
+    dist:"\u05d4\u05ea\u05e4\u05dc\u05d2\u05d5\u05ea \u05e6\u05d9\u05d5\u05e0\u05d9\u05dd",
+    range:"\u05d8\u05d5\u05d5\u05d7", count:"\u05ea\u05dc\u05de\u05d9\u05d3\u05d9\u05dd", pct:"\u05d0\u05d7\u05d5\u05d6",
+    avgLabel:"\u05de\u05de\u05d5\u05e6\u05e2 \u05db\u05d9\u05ea\u05d4",
+    interventionTitle:"\u05d1\u05e0\u05d9\u05d9\u05ea \u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05ea\u05e2\u05e8\u05d1\u05d5\u05ea",
+    resources:"\u05de\u05e9\u05d0\u05d1\u05d9\u05dd \u05d6\u05de\u05d9\u05e0\u05d9\u05dd",
+    resourcesHint:"\u05dc\u05d3\u05d5\u05d2\u05de\u05d4: \u05de\u05d5\u05e8\u05d4 \u05e1\u05d9\u05d9\u05e2\u002c \u05e9\u05e2\u05d5\u05ea \u05e4\u05e8\u05d8\u05e0\u05d9\u05d5\u05ea\u002c \u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d5\u05ea \u05d3\u05d9\u05d2\u05d9\u05d8\u05dc\u05d9\u05d5\u05ea...",
+    period:"\u05ea\u05e7\u05d5\u05e4\u05ea \u05d4\u05d1\u05d9\u05e6\u05d5\u05e2",
+    periodHint:"\u05dc\u05d3\u05d5\u05d2\u05de\u05d4: 3 \u05e9\u05d1\u05d5\u05e2\u05d5\u05ea \u2014 1/11 \u05e2\u05d3 22/11",
+    hours:"\u05e9\u05e2\u05d5\u05ea \u05e9\u05d1\u05d5\u05e2\u05d9\u05d5\u05ea \u05dc\u05db\u05dc \u05e7\u05d1\u05d5\u05e6\u05d4",
+    hoursHint:"\u05dc\u05d3\u05d5\u05d2\u05de\u05d4: \u05e9\u05e2\u05ea\u05d9\u05d9\u05dd \u05dc\u05e7\u05d1\u05d5\u05e6\u05ea \u05d4\u05de\u05d9\u05e7\u05d5\u05d3",
+    assessment:"\u05e9\u05d9\u05d8\u05ea \u05d4\u05e2\u05e8\u05db\u05d4",
+    assessmentHint:"\u05dc\u05d3\u05d5\u05d2\u05de\u05d4: \u05de\u05d8\u05dc\u05d4 \u05d9\u05d9\u05e9\u05d5\u05de\u05d9\u05ea + \u05de\u05d1\u05d3\u05e7 \u05e7\u05e6\u05e8",
+    reEval:"\u05de\u05d5\u05e2\u05d3 \u05de\u05d1\u05d3\u05e7 \u05d7\u05d5\u05d6\u05e8",
+    generatePlan:"\u05e6\u05d5\u05e8 \u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05ea\u05e2\u05e8\u05d1\u05d5\u05ea",
+    downloadDocx:"Word \u05d4\u05d5\u05e8\u05d3",
+    downloadPdf:"PDF \u05d4\u05d5\u05e8\u05d3",
+    print:"\u05d4\u05d3\u05e4\u05e1\u05d4",
+    planTitle:"\u05d3\u05d5\u05d7 \u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05ea\u05e2\u05e8\u05d1\u05d5\u05ea",
+    distSection:"\u05de\u05d9\u05e4\u05d5\u05d9 \u05db\u05d9\u05ea\u05ea\u05d9",
+    totalStudents:"\u05e1\u05d4\u05db \u05ea\u05dc\u05de\u05d9\u05d3\u05d9\u05dd",
+    intensive:"\u05e7\u05d1\u05d5\u05e6\u05ea \u05de\u05d9\u05e7\u05d5\u05d3 (0-40)",
+    strategic:"\u05ea\u05de\u05d9\u05db\u05d4 \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9\u05ea (40-60)",
+    timeframe:"\u05de\u05e1\u05d2\u05e8\u05ea \u05d6\u05de\u05df \u05d5\u05d4\u05e2\u05e8\u05db\u05d4",
+    workPeriod:"\u05ea\u05e7\u05d5\u05e4\u05ea \u05dc\u05de\u05d9\u05d3\u05d4",
+    weeklyHours:"\u05e9\u05e2\u05d5\u05ea \u05e9\u05d1\u05d5\u05e2\u05d9\u05d5\u05ea",
+    evalMethod:"\u05e9\u05d9\u05d8\u05ea \u05d4\u05e2\u05e8\u05db\u05d4",
+    reEvalDate:"\u05de\u05d1\u05d3\u05e7 \u05d7\u05d5\u05d6\u05e8",
+    availableRes:"\u05de\u05e9\u05d0\u05d1\u05d9\u05dd",
+    strategiesTitle:"\u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9\u05d5\u05ea \u05e4\u05d3\u05d2\u05d5\u05d2\u05d9\u05d5\u05ea",
+    groupTarget:"\u05e7\u05d1\u05d5\u05e6\u05d4",
+    strategy:"\u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9\u05d4 \u05de\u05d5\u05de\u05dc\u05e6\u05ea",
+    intensiveGroup:"\u05d4\u05ea\u05e2\u05e8\u05d1\u05d5\u05ea \u05d0\u05d9\u05e0\u05d8\u05e0\u05e1\u05d9\u05d1\u05d9\u05ea",
+    strategicGroup:"\u05ea\u05de\u05d9\u05db\u05d4 \u05d0\u05e1\u05d8\u05e8\u05d8\u05d2\u05d9\u05ea",
+    enrichGroup:"\u05d4\u05e2\u05e9\u05e8\u05d4 \u05d5\u05de\u05e6\u05d5\u05d9\u05e0\u05d5\u05ea",
+    intensiveStr:"\u05e7\u05d1\u05d5\u05e6\u05d5\u05ea \u05e7\u05d8\u05e0\u05d5\u05ea (Pull-out). \u05de\u05d9\u05e7\u05d5\u05d3 \u05d1\u05e4\u05e2\u05e0\u05d5\u05d7 \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05d4\u05dc\u05d9\u05d1\u05d4. \u05de\u05d5\u05d3\u05dc\u05d9\u05e0\u05d2 \u05d9\u05e9\u05d9\u05e8 \u05e2\u05dd \u05dc\u05d9\u05d5\u05d5\u05d9 \u05d0\u05d9\u05e9\u05d9.",
+    strategicStr:"\u05d3\u05e4\u05d9 \u05e2\u05d1\u05d5\u05d3\u05d4 \u05de\u05de\u05d5\u05e7\u05d3\u05d9\u05dd\u002c \u05dc\u05de\u05d9\u05d3\u05d4 \u05e2\u05e6\u05de\u05d0\u05d9\u05ea \u05d1\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d5\u05ea\u002c \u05dc\u05de\u05d9\u05d3\u05ea \u05e2\u05de\u05d9\u05ea\u05d9\u05dd.",
+    enrichStr:"\u05de\u05d8\u05dc\u05d5\u05ea \u05d7\u05e9\u05d9\u05d1\u05d4 \u05de\u05e1\u05d3\u05e8 \u05d2\u05d1\u05d5\u05d4 \u05d5\u05e4\u05e8\u05d5\u05d9\u05e7\u05d8\u05d9\u05dd \u05e2\u05e6\u05de\u05d0\u05d9\u05d9\u05dd \u05dc\u05e9\u05de\u05d9\u05e8\u05ea \u05d4\u05de\u05e6\u05d5\u05d9\u05e0\u05d5\u05ea.",
+    notSet:"\u05dc\u05d0 \u05d4\u05d5\u05d2\u05d3\u05e8",
+    motivHigh:"\u05de\u05e6\u05d5\u05d9\u05df! \u05d4\u05d1\u05d9\u05e6\u05d5\u05e2\u05d9\u05dd \u05d2\u05d1\u05d5\u05d4\u05d9\u05dd\u002c \u05d4\u05de\u05e9\u05d9\u05db\u05d5 \u05db\u05da.",
+    motivMid:"\u05d1\u05d9\u05e6\u05d5\u05e2\u05d9\u05dd \u05d8\u05d5\u05d1\u05d9\u05dd \u05e2\u05dd \u05de\u05e7\u05d5\u05dd \u05dc\u05e9\u05d9\u05e4\u05d5\u05e8. \u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05ea\u05e2\u05e8\u05d1\u05d5\u05ea \u05ea\u05e2\u05e9\u05d4 \u05d4\u05d1\u05d3\u05dc \u05d2\u05d3\u05d5\u05dc.",
+    motivLow:"\u05d0\u05dc \u05d3\u05d0\u05d2\u05d4\u002c \u05db\u05dc \u05ea\u05dc\u05de\u05d9\u05d3 \u05d9\u05db\u05d5\u05dc \u05dc\u05d4\u05ea\u05e7\u05d3\u05dd. \u05d4\u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05e0\u05db\u05d5\u05e0\u05d4 \u05ea\u05e9\u05e0\u05d4 \u05d0\u05ea \u05d4\u05ea\u05d5\u05e6\u05d0\u05d5\u05ea.",
+    compareBtn:"\u05d4\u05e9\u05d5\u05d5\u05d0\u05d4 \u05e2\u05dd \u05de\u05d1\u05d7\u05df \u05d0\u05d7\u05e8",
+    compareHint:"\u05d4\u05d3\u05d1\u05e7 \u05e0\u05ea\u05d5\u05e0\u05d9 \u05d4\u05de\u05d1\u05d7\u05df \u05d4\u05e9\u05e0\u05d9 \u05dc\u05db\u05d0\u05df...",
+    compareTitle:"\u05d4\u05e9\u05d5\u05d5\u05d0\u05ea \u05e9\u05e0\u05d9 \u05de\u05d1\u05d7\u05e0\u05d9\u05dd",
+    exam1:"\u05de\u05d1\u05d7\u05df \u05e8\u05d0\u05e9\u05d5\u05df", exam2:"\u05de\u05d1\u05d7\u05df \u05e9\u05e0\u05d9",
+    exportList:"\u05d9\u05d9\u05e6\u05d5\u05d0 \u05e8\u05e9\u05d9\u05de\u05d5\u05ea \u05e7\u05d1\u05d5\u05e6\u05d5\u05ea",
+    listInt:"\u05e8\u05e9\u05d9\u05de\u05ea \u05e7\u05d1\u05d5\u05e6\u05ea \u05de\u05d9\u05e7\u05d5\u05d3",
+    listStr:"\u05e8\u05e9\u05d9\u05de\u05ea \u05ea\u05de\u05d9\u05db\u05d4",
+    listEnr:"\u05e8\u05e9\u05d9\u05de\u05ea \u05d4\u05e2\u05e9\u05e8\u05d4",
+    qWord:"\u05e9\u05d0\u05dc\u05d5\u05ea",
+    subjects:{arabic:"\u05e2\u05e8\u05d1\u05d9\u05ea", hebrew:"\u05e2\u05d1\u05e8\u05d9\u05ea", english:"\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea", math:"\u05de\u05ea\u05de\u05d8\u05d9\u05e7\u05d4", science:"\u05de\u05d3\u05e2\u05d9\u05dd"},
+    langBtns:{ar:"\u05e2\u05e8\u05d1\u05d9\u05ea", he:"\u05e2\u05d1\u05e8\u05d9\u05ea", en:"\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea"},
+    fillAll:"\u05d0\u05e0\u05d0 \u05de\u05dc\u05d0 \u05d0\u05ea \u05db\u05dc \u05d4\u05e9\u05d3\u05d5\u05ea",
+    noData:"\u05dc\u05d0 \u05e0\u05de\u05e6\u05d0\u05d5 \u05de\u05e1\u05e4\u05e8\u05d9\u05dd. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05d3\u05d1\u05e7\u05ea \u05e0\u05ea\u05d5\u05e0\u05d9 \u05d4\u05e7\u05d5\u05d1\u05e5 \u05d1\u05e6\u05d5\u05e8\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4.",
+    badTable:"\u05d0\u05e0\u05d0 \u05d4\u05d3\u05d1\u05e7 \u05d8\u05d1\u05dc\u05d4 \u05d1\u05e4\u05d5\u05e8\u05de\u05d8 Markdown \u05e0\u05db\u05d5\u05df."
+  },
+  en: {
+    mainTitle: "Smart Flashes with Mona Mustafa",
+    mainSub:   "The Smart Platform for Classroom Screening",
+    pickLang:  "Choose Interface Language",
+    splashLabel:"Choose your language",
+    pickSubject:"Choose a Subject",
+    subjectHint:"Prompts and reports will be automatically customized for the selected subject",
+    back:"Back", save:"Save Draft", saved:"Saved",
+    next:"Next",
+    step1:"Info", step2:"Exam Structure", step3:"Enter Grades", step4:"Analysis & Plan",
+    teacherName:"Teacher Name",
+    gradeLabel:"Class / Group",
+    examDate:"Exam Date",
+    subjectLabel:"Subject",
+    promptTitle:"Exam Analysis Prompt",
+    promptDesc:"Copy this prompt and paste it into an AI tool along with the exam image:",
+    copyPrompt:"Copy Prompt", copied:"Copied",
+    aiTools:"Free AI Tools:",
+    pasteTable:"Paste the generated table here",
+    pasteTableHint:"Paste the Markdown table generated by the AI...",
+    previewTitle:"Table Preview",
+    previewHint:"Verify the data before generating the file",
+    generateExcel:"Generate Class Mapping File",
+    excelOk:"File created! Open it, enter student grades, then copy the rows back here.",
+    pasteData:"Paste student data from the file",
+    pasteDataHint:"After entering grades, select all student rows and paste here...",
+    analyzeBtn:"Analyze Results",
+    dist:"Grade Distribution",
+    range:"Range", count:"Students", pct:"Percent",
+    avgLabel:"Class Average",
+    interventionTitle:"Build Intervention Plan",
+    resources:"Available Resources",
+    resourcesHint:"e.g., Teaching assistant, digital platform, small-group sessions...",
+    period:"Plan Duration",
+    periodHint:"e.g., 3 weeks — Nov 1 to Nov 22",
+    hours:"Weekly Hours per Group",
+    hoursHint:"e.g., 2 hours for the intensive group",
+    assessment:"Assessment Method",
+    assessmentHint:"e.g., Performance task + short quiz",
+    reEval:"Re-evaluation Date",
+    generatePlan:"Generate Intervention Plan",
+    downloadDocx:"Download Word",
+    downloadPdf:"Download PDF",
+    print:"Print",
+    planTitle:"Intervention & Support Plan",
+    distSection:"Achievement Distribution",
+    totalStudents:"Total Students",
+    intensive:"Intensive Intervention Group (0-40)",
+    strategic:"Strategic Support Group (40-60)",
+    timeframe:"Timeline & Assessment",
+    workPeriod:"Working Period",
+    weeklyHours:"Weekly Hours",
+    evalMethod:"Assessment Method",
+    reEvalDate:"Re-evaluation Date",
+    availableRes:"Available Resources",
+    strategiesTitle:"Pedagogical Intervention Strategies",
+    groupTarget:"Group",
+    strategy:"Recommended Strategy",
+    intensiveGroup:"Intensive Intervention",
+    strategicGroup:"Strategic Support",
+    enrichGroup:"Enrichment & Excellence",
+    intensiveStr:"Small pull-out groups. Focus on core skill decoding. Direct modeling with individual follow-up.",
+    strategicStr:"Guided worksheets, self-directed digital learning, peer learning.",
+    enrichStr:"Higher-order thinking tasks and independent exploratory projects to maintain excellence.",
+    notSet:"Not specified",
+    motivHigh:"Excellent! Class performance is outstanding — keep it up.",
+    motivMid:"Good performance with room to improve. The intervention plan will make a big difference.",
+    motivLow:"Don't worry — every student can progress. The right plan will change the results.",
+    compareBtn:"Compare with Another Exam",
+    compareHint:"Paste the second exam data here...",
+    compareTitle:"Comparison of Two Exams",
+    exam1:"Exam 1", exam2:"Exam 2",
+    exportList:"Export Group Lists",
+    listInt:"Intensive Group List",
+    listStr:"Strategic Support List",
+    listEnr:"Enrichment List",
+    qWord:"questions",
+    subjects:{arabic:"Arabic", hebrew:"Hebrew", english:"English", math:"Math", science:"Science"},
+    langBtns:{ar:"Arabic", he:"Hebrew", en:"English"},
+    fillAll:"Please fill all fields",
+    noData:"No numbers found. Make sure to paste the file data correctly.",
+    badTable:"Please paste a valid Markdown table."
+  }
+};
+
+const PROMPTS = {
+  arabic:{
+    ar:"قم بتحليل امتحان اللغة العربية المرفق وأنشئ جدولاً بهذه الأعمدة الخمسة بالضبط:\n| القسم | رقم السؤال | المهارة الأساسية (بلوم) | المهارة الثانوية (مضمون السؤال) | العلامة القصوى |\nتعليمات:\n- المهارة الأساسية: اختر مستوى واحداً فقط من تصنيف بلوم: تذكر، فهم، تطبيق، تحليل، تقييم، إبداع\n- المهارة الثانوية: اذكر المحتوى أو الموضوع المحدد الذي يقيسه السؤال (مثل: قراءة جهرية، قواعد نحوية، فهم النص)\n- أخرج البيانات كجدول Markdown فقط بدون أي شرح أو مقدمة.",
+    he:"\u05e0\u05ea\u05d7 \u05d0\u05ea \u05de\u05d1\u05d7\u05df \u05d4\u05e2\u05e8\u05d1\u05d9\u05ea \u05d4\u05de\u05e6\u05d5\u05e8\u05e3 \u05d5\u05e6\u05d5\u05e8 \u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d7\u05de\u05e9 \u05e2\u05de\u05d5\u05d3\u05d5\u05ea \u05d1\u05d3\u05d9\u05d5\u05e7:\n| \u05e4\u05e8\u05e7 | \u05de\u05e1\u05e4\u05e8 \u05e9\u05d0\u05dc\u05d4 | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea (\u05d1\u05dc\u05d5\u05dd) | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea (\u05ea\u05d5\u05db\u05df) | \u05e0\u05d9\u05e7\u05d5\u05d3 \u05de\u05e7\u05e1\u05d9\u05de\u05dc\u05d9 |\n\u05d4\u05e0\u05d7\u05d9\u05d5\u05ea:\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea: \u05d1\u05d7\u05e8 \u05e8\u05de\u05d4 \u05d0\u05d7\u05ea \u05de\u05d1\u05dc\u05d5\u05dd: \u05d6\u05d9\u05db\u05e8\u05d5\u05df\u002c \u05d4\u05d1\u05e0\u05d4\u002c \u05d9\u05d9\u05e9\u05d5\u05dd\u002c \u05e0\u05d9\u05ea\u05d5\u05d7\u002c \u05d4\u05e2\u05e8\u05db\u05d4\u002c \u05d9\u05e6\u05d9\u05e8\u05d4\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea: \u05e6\u05d9\u05d9\u05df \u05d0\u05ea \u05d4\u05ea\u05d5\u05db\u05df \u05d4\u05e1\u05e4\u05e6\u05d9\u05e4\u05d9 \u05e9\u05d4\u05e9\u05d0\u05dc\u05d4 \u05de\u05de\u05d3\u05d3\u05ea\n- \u05d4\u05e4\u05e7 \u05d8\u05d1\u05dc\u05ea Markdown \u05d1\u05dc\u05d1\u05d3 \u05dc\u05dc\u05d0 \u05d4\u05e1\u05d1\u05e8\u05d9\u05dd.",
+    en:"Analyze the attached Arabic Language exam and create a table with exactly these 5 columns:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\nInstructions:\n- Core Skill: Choose ONE level from Bloom's Taxonomy: Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Describe the specific content or topic the question measures (e.g., oral reading, grammar, text comprehension)\n- Output as a Markdown table only, no preamble or explanation."
+  },
+  hebrew:{
+    ar:"قم بتحليل امتحان اللغة العبرية المرفق وأنشئ جدولاً بهذه الأعمدة الخمسة بالضبط:\n| القسم | رقم السؤال | المهارة الأساسية (بلوم) | المهارة الثانوية (مضمون السؤال) | العلامة القصوى |\nتعليمات:\n- المهارة الأساسية: اختر مستوى واحداً من تصنيف بلوم: تذكر، فهم، تطبيق، تحليل، تقييم، إبداع\n- المهارة الثانوية: اذكر المحتوى أو المهارة المحددة (مثل: قراءة، كتابة إبداعية، قواعد)\n- أخرج جدول Markdown فقط.",
+    he:"\u05e0\u05ea\u05d7 \u05d0\u05ea \u05de\u05d1\u05d7\u05df \u05d4\u05e2\u05d1\u05e8\u05d9\u05ea \u05d4\u05de\u05e6\u05d5\u05e8\u05e3 \u05d5\u05e6\u05d5\u05e8 \u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d7\u05de\u05e9 \u05e2\u05de\u05d5\u05d3\u05d5\u05ea:\n| \u05e4\u05e8\u05e7 | \u05de\u05e1\u05e4\u05e8 \u05e9\u05d0\u05dc\u05d4 | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea (\u05d1\u05dc\u05d5\u05dd) | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea (\u05ea\u05d5\u05db\u05df) | \u05e0\u05d9\u05e7\u05d5\u05d3 \u05de\u05e7\u05e1\u05d9\u05de\u05dc\u05d9 |\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea: \u05d1\u05dc\u05d5\u05dd - \u05d6\u05d9\u05db\u05e8\u05d5\u05df\u002c \u05d4\u05d1\u05e0\u05d4\u002c \u05d9\u05d9\u05e9\u05d5\u05dd\u002c \u05e0\u05d9\u05ea\u05d5\u05d7\u002c \u05d4\u05e2\u05e8\u05db\u05d4\u002c \u05d9\u05e6\u05d9\u05e8\u05d4\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea: \u05ea\u05d5\u05db\u05df \u05d4\u05e9\u05d0\u05dc\u05d4 \u05d4\u05e1\u05e4\u05e6\u05d9\u05e4\u05d9\n- \u05d8\u05d1\u05dc\u05d4 \u05d1\u05dc\u05d1\u05d3 \u05dc\u05dc\u05d0 \u05d4\u05e1\u05d1\u05e8\u05d9\u05dd.",
+    en:"Analyze the attached Hebrew Language exam and output a table with exactly these 5 columns:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\n- Core Skill: ONE Bloom level: Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Specific content measured by the question\n- Markdown table only, no explanation."
+  },
+  english:{
+    ar:"قم بتحليل امتحان اللغة الانجليزية المرفق وأنشئ جدولاً بهذه الأعمدة الخمسة بالضبط:\n| القسم | رقم السؤال | المهارة الأساسية (بلوم) | المهارة الثانوية (مضمون السؤال) | العلامة القصوى |\nتعليمات:\n- المهارة الأساسية: اختر من تصنيف بلوم: تذكر، فهم، تطبيق، تحليل، تقييم، إبداع\n- المهارة الثانوية: المحتوى المحدد (مثل: Reading Comprehension, Grammar, Writing, Vocabulary)\n- جدول Markdown فقط.",
+    he:"\u05e0\u05ea\u05d7 \u05d0\u05ea \u05de\u05d1\u05d7\u05df \u05d4\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea \u05d5\u05e6\u05d5\u05e8 \u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d7\u05de\u05e9 \u05e2\u05de\u05d5\u05d3\u05d5\u05ea:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\n- Core Skill: Bloom level - Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Specific content (e.g. Reading Comprehension, Grammar, Writing)\n- \u05d8\u05d1\u05dc\u05ea Markdown \u05d1\u05dc\u05d1\u05d3.",
+    en:"Analyze the attached English Language exam and output a table with exactly these 5 columns:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\nInstructions:\n- Core Skill: Choose ONE from Bloom's Taxonomy: Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Specific language skill tested (e.g. Reading Comprehension, Grammar, Vocabulary, Writing)\n- Output a Markdown table ONLY. No preamble, no explanation."
+  },
+  math:{
+    ar:"قم بتحليل امتحان الرياضيات المرفق وأنشئ جدولاً بهذه الأعمدة الخمسة بالضبط:\n| القسم | رقم السؤال | المهارة الأساسية (بلوم) | المهارة الثانوية (مضمون السؤال) | العلامة القصوى |\nتعليمات:\n- المهارة الأساسية: مستوى بلوم المناسب: تذكر، فهم، تطبيق، تحليل، تقييم، إبداع\n- المهارة الثانوية: المجال الرياضي المحدد (مثل: جمع كسور، معادلات خطية، مساحة المثلث، مسألة لفظية)\n- جدول Markdown فقط، يشمل: الحساب، الجبر، الهندسة، الإحصاء، المسائل التطبيقية.",
+    he:"\u05e0\u05ea\u05d7 \u05d0\u05ea \u05de\u05d1\u05d7\u05df \u05d4\u05de\u05ea\u05de\u05d8\u05d9\u05e7\u05d4 \u05d5\u05e6\u05d5\u05e8 \u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d7\u05de\u05e9 \u05e2\u05de\u05d5\u05d3\u05d5\u05ea:\n| \u05e4\u05e8\u05e7 | \u05de\u05e1\u05e4\u05e8 \u05e9\u05d0\u05dc\u05d4 | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea (\u05d1\u05dc\u05d5\u05dd) | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea (\u05ea\u05d5\u05db\u05df) | \u05e0\u05d9\u05e7\u05d5\u05d3 |\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea: \u05d1\u05dc\u05d5\u05dd - \u05d6\u05d9\u05db\u05e8\u05d5\u05df\u002c \u05d4\u05d1\u05e0\u05d4\u002c \u05d9\u05d9\u05e9\u05d5\u05dd\u002c \u05e0\u05d9\u05ea\u05d5\u05d7\u002c \u05d4\u05e2\u05e8\u05db\u05d4\u002c \u05d9\u05e6\u05d9\u05e8\u05d4\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea: \u05ea\u05d7\u05d5\u05dd \u05de\u05ea\u05de\u05d8\u05d9 \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9 (\u05dc\u05de\u05e9\u05dc: \u05e9\u05d1\u05e8\u05d9\u05dd\u002c \u05e9\u05d8\u05d7 \u05de\u05e9\u05d5\u05dc\u05e9\u002c \u05de\u05e9\u05d5\u05d5\u05d0\u05d5\u05ea)\n- \u05d8\u05d1\u05dc\u05ea Markdown \u05d1\u05dc\u05d1\u05d3.",
+    en:"Analyze the attached Math exam and output a table with exactly these 5 columns:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\nInstructions:\n- Core Skill: Bloom level — Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Specific math domain (e.g., Fraction addition, Linear equations, Triangle area, Word problem)\n- Markdown table only. Cover arithmetic, algebra, geometry, statistics."
+  },
+  science:{
+    ar:"قم بتحليل امتحان العلوم المرفق وأنشئ جدولاً بهذه الأعمدة الخمسة بالضبط:\n| القسم | رقم السؤال | المهارة الأساسية (بلوم) | المهارة الثانوية (مضمون السؤال) | العلامة القصوى |\nتعليمات:\n- المهارة الأساسية: مستوى بلوم: تذكر، فهم، تطبيق، تحليل، تقييم، إبداع\n- المهارة الثانوية: المفهوم العلمي المحدد (مثل: دورة الماء، البناء الضوئي، الخلية النباتية، قانون نيوتن)\n- جدول Markdown فقط، يشمل: الأحياء، الكيمياء، الفيزياء، علوم الأرض.",
+    he:"\u05e0\u05ea\u05d7 \u05d0\u05ea \u05de\u05d1\u05d7\u05df \u05d4\u05de\u05d3\u05e2\u05d9\u05dd \u05d5\u05e6\u05d5\u05e8 \u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d7\u05de\u05e9 \u05e2\u05de\u05d5\u05d3\u05d5\u05ea:\n| \u05d9\u05d7\u05d9\u05d3\u05d4 | \u05de\u05e1\u05e4\u05e8 \u05e9\u05d0\u05dc\u05d4 | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea (\u05d1\u05dc\u05d5\u05dd) | \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea (\u05ea\u05d5\u05db\u05df) | \u05e0\u05d9\u05e7\u05d5\u05d3 \u05de\u05e7\u05e1\u05d9\u05de\u05dc\u05d9 |\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05ea: \u05d1\u05dc\u05d5\u05dd - \u05d6\u05d9\u05db\u05e8\u05d5\u05df\u002c \u05d4\u05d1\u05e0\u05d4\u002c \u05d9\u05d9\u05e9\u05d5\u05dd\u002c \u05e0\u05d9\u05ea\u05d5\u05d7\u002c \u05d4\u05e2\u05e8\u05db\u05d4\u002c \u05d9\u05e6\u05d9\u05e8\u05d4\n- \u05de\u05d9\u05d5\u05de\u05e0\u05d5\u05ea \u05de\u05e9\u05e0\u05d9\u05ea: \u05de\u05d5\u05e9\u05d2 \u05de\u05d3\u05e2\u05d9 \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9 (\u05dc\u05de\u05e9\u05dc: \u05de\u05d7\u05d6\u05d5\u05e8 \u05d4\u05de\u05d9\u05dd\u002c \u05e4\u05d5\u05d8\u05d5\u05e1\u05d9\u05e0\u05ea\u05d6\u05d4\u002c \u05ea\u05d0 \u05d4\u05e6\u05de\u05d7)\n- \u05d8\u05d1\u05dc\u05ea Markdown \u05d1\u05dc\u05d1\u05d3.",
+    en:"Analyze the attached Science exam and output a table with exactly these 5 columns:\n| Section | Question Number | Core Skill (Bloom) | Secondary Skill (Content) | Max Score |\nInstructions:\n- Core Skill: Bloom level — Remember, Understand, Apply, Analyze, Evaluate, Create\n- Secondary Skill: Specific scientific concept (e.g., Water cycle, Photosynthesis, Newton's law, Plant cell)\n- Markdown table only. Cover biology, chemistry, physics, earth science."
+  }
+};
+
+/* helpers */
+function parseMD(text){
+  if(!text||!text.trim()) return null;
+
+  // ── STEP 1: join wrapped lines ──
+  // AI sometimes wraps long cell content across multiple lines.
+  // We rejoin lines that don't start a new row (no leading | or digit pattern).
+  const rawLines = text.split('\n');
+  const joined = [];
+  for(const line of rawLines){
+    const trimmed = line.trim();
+    if(!trimmed) continue;
+    // A "real" table row starts with | or with content before the first |
+    const isRow = trimmed.startsWith('|') || trimmed.includes('|');
+    const isSep = /^[\|\-\s:]+$/.test(trimmed);
+    if(isRow || isSep){
+      joined.push(trimmed);
+    } else if(joined.length>0){
+      // continuation of previous cell — append to last line
+      joined[joined.length-1] += ' ' + trimmed;
+    }
+  }
+
+  // ── STEP 2: filter to pipe-containing rows only ──
+  const rows = joined.filter(r=>r.includes('|'));
+  if(rows.length<2) return null;
+
+  // ── STEP 3: find header row and skip separator ──
+  // Skip the first row (header) and any separator rows
+  const data=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    // skip separator rows like |---|---|
+    if(/^[\|\-\s:]+$/.test(r)) continue;
+
+    // split on | and clean up
+    const cells=r.split('|').map(c=>c.trim()).filter((c,j,a)=>j>0&&j<a.length-1);
+    if(cells.length<3) continue;
+
+    // find the last numeric cell — that's always the score
+    let maxIdx=-1;
+    for(let k=cells.length-1;k>=0;k--){
+      const v=parseFloat(cells[k].replace(/[^\d.]/g,''));
+      if(!isNaN(v)&&v>0&&v<=100){maxIdx=k;break;}
+    }
+    if(maxIdx<0) continue; // no valid score found
+
+    const maxVal=parseFloat(cells[maxIdx].replace(/[^\d.]/g,''))||0;
+
+    // now assign columns based on how many we have
+    const n=maxIdx; // number of non-score columns
+    let section='', qNum='', bloomSkill='', contentSkill='';
+
+    if(n>=4){
+      // 5-col: section | qNum | bloom | content | score
+      section=cells[0]; qNum=cells[1]; bloomSkill=cells[2]; contentSkill=cells[3];
+    } else if(n===3){
+      // 4-col: section | qNum | skill | score
+      section=cells[0]; qNum=cells[1]; bloomSkill=''; contentSkill=cells[2];
+    } else if(n===2){
+      section=cells[0]; qNum=cells[1]; bloomSkill=''; contentSkill='';
+    } else if(n===1){
+      section=''; qNum=cells[0]; bloomSkill=''; contentSkill='';
+    }
+
+    // skip header-like rows (no digit in qNum and not a data row)
+    if(!maxVal && !section && !qNum) continue;
+
+    data.push({section, qNum, bloomSkill, contentSkill, max:maxVal});
+  }
+  return data.length>0?data:null;
+}
+
+function parseScores(raw){
+  const rows=raw.split('\n').map(r=>r.split('\t'));
+  let sc=[];
+  rows.forEach(r=>{const v=parseFloat(r[r.length-1]);if(!isNaN(v)&&v>=0&&v<=100)sc.push(v);});
+  if(!sc.length) rows.forEach(r=>{const v=parseFloat(r[r.length-2]);if(!isNaN(v)&&v>=0&&v<=100)sc.push(v);});
+  return sc;
+}
+
+function buildDist(scores){
+  const d={"0-40":0,"40-60":0,"60-80":0,"80-100":0};
+  scores.forEach(s=>{if(s<=40)d["0-40"]++;else if(s<=60)d["40-60"]++;else if(s<=80)d["60-80"]++;else d["80-100"]++;});
+  return d;
+}
+
+function avg(sc){return sc.length?sc.reduce((a,b)=>a+b,0)/sc.length:0;}
+
+const KEY='wamadhat_v4';
+const ld=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}');}catch{return {};}};
+const sd=(o)=>{try{localStorage.setItem(KEY,JSON.stringify(o));}catch{}};
+
+/* ── SUB-COMPONENTS ── */
+
+const SiteHeader=({t})=>(
+  <div className="site-header">
+    <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'}/>
+    <div className="sh-text">
+      <div className="sh-title">{t.mainTitle}</div>
+      <div className="sh-sub">{t.mainSub}</div>
+    </div>
+    <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'}/>
+  </div>
+);
+
+const MiniHeader=({t})=>(
+  <div className="mini-header no-print">
+    <img src={LOGO} alt="logo" className="mh-logo" onError={e=>e.target.style.display='none'}/>
+    <div>
+      <div className="mh-title">{t.mainTitle}</div>
+      <div className="mh-sub">{t.mainSub}</div>
+    </div>
+  </div>
+);
+
+const StepBar=({phase,t})=>{
+  const steps=[t.step1,t.step2,t.step3,t.step4];
+  return(
+    <div className="flex items-center mb-8 px-2 no-print">
+      {steps.map((s,i)=>{
+        const idx=i+1,done=phase>idx,active=phase===idx;
+        return(
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center gap-1">
+              <div className={`step-dot ${done?'bg-emerald-500 text-white':active?'bg-orange-500 text-white':'bg-gray-200 text-gray-400'}`}>{done?'✓':idx}</div>
+              <span className={`text-xs font-semibold ${active?'text-orange-600':'text-gray-400'}`}>{s}</span>
+            </div>
+            {i<steps.length-1&&<div className={`step-line mx-1 mb-4 ${done?'bg-emerald-400':'bg-gray-200'}`}/>}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
+const CopyBtn=({text,t})=>{
+  const [st,setSt]=useState('idle');
+  const handle=()=>safeCopy(text,()=>{setSt('done');setTimeout(()=>setSt('idle'),2200);});
+  return(
+    <button onClick={handle} className={`copy-btn ${st==='done'?'copy-done':'copy-idle'}`}>
+      {st==='done'?`\u2713 ${t.copied}`:`\u29C9 ${t.copyPrompt}`}
+    </button>
+  );
+};
+
+const SubjectPicker=({selected,onChange,t})=>(
+  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-4">
+    {Object.entries(SUBJECT_META).map(([key,meta])=>(
+      <div key={key} onClick={()=>onChange(key)} className="subject-card"
+        style={selected===key?{borderColor:meta.color,background:meta.bg}:{}}>
+        <div style={{fontSize:'2rem',marginBottom:'8px'}}>{meta.icon}</div>
+        <div style={{fontWeight:700,fontSize:'.85rem',color:selected===key?meta.color:'#374151'}}>{t.subjects[key]}</div>
+      </div>
+    ))}
+  </div>
+);
+
+const BLOOM_COLOR={
+  'تذكر':'#6b7280','فهم':'#3b82f6','تطبيق':'#10b981',
+  'تحليل':'#f59e0b','تقييم':'#ef4444','إبداع':'#8b5cf6',
+  'Remember':'#6b7280','Understand':'#3b82f6','Apply':'#10b981',
+  'Analyze':'#f59e0b','Evaluate':'#ef4444','Create':'#8b5cf6',
+  'זיכרון':'#6b7280','הבנה':'#3b82f6','יישום':'#10b981',
+  'ניתוח':'#f59e0b','הערכה':'#ef4444','יצירה':'#8b5cf6'
+};
+const bloomColor=(s)=>{
+  if(!s) return '#e5e7eb';
+  for(const [k,v] of Object.entries(BLOOM_COLOR)){if(s.includes(k)) return v;}
+  return '#e5e7eb';
+};
+
+const TablePreview=({data,t,lang})=>{
+  if(!data||!data.length) return null;
+  const qLabel=lang==='הוא'?'שאלות':lang==='en'?'questions':'سؤال';
+  const hBloom  = lang==='he'?'מיומנות עיקרית (בלום)':lang==='en'?'Core Skill (Bloom)':'المهارة الأساسية (بلوم)';
+  const hContent= lang==='he'?'מיומנות משנית':lang==='en'?'Secondary Skill':'المهارة الثانوية';
+  const hScore  = lang==='he'?'ניקוד':lang==='en'?'Score':'العلامة';
+  return(
+    <div className="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100 fade-in">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-blue-600 font-bold text-sm">{t.previewTitle}</span>
+        <span className="text-xs text-gray-400">— {t.previewHint}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="preview-table">
+          <thead>
+            <tr>
+              <th style={{background:'#1e3a5f',color:'white'}}>#</th>
+              <th style={{background:'#1e3a5f',color:'white'}}>Section</th>
+              <th style={{background:'#7c3aed',color:'white'}}>{hBloom}</th>
+              <th style={{background:'#0f766e',color:'white'}}>{hContent}</th>
+              <th style={{background:'#dc2626',color:'white'}}>{hScore}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((q,i)=>(
+              <tr key={i} style={{background:i%2===0?'white':'#f8fafc'}}>
+                <td style={{color:'#6b7280',fontWeight:600}}>{q.qNum||i+1}</td>
+                <td>{q.section}</td>
+                <td>
+                  <span style={{display:'inline-block',padding:'2px 10px',borderRadius:'20px',fontSize:'.78rem',fontWeight:700,background:bloomColor(q.bloomSkill)+'22',color:bloomColor(q.bloomSkill),border:'1px solid '+bloomColor(q.bloomSkill)+'44'}}>
+                    {q.bloomSkill||'—'}
+                  </span>
+                </td>
+                <td style={{fontSize:'.82rem',color:'#374151'}}>{q.contentSkill||q.skill||'—'}</td>
+                <td style={{fontWeight:700,color:'#dc2626'}}>{q.max}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{background:'#f1f5f9'}}>
+              <td colSpan={4} style={{fontWeight:700,textAlign:'start',padding:'6px 10px',color:'#374151'}}>
+                {data.length} {lang==='הוא'?'שאלות':lang==='en'?'questions':'سؤال'}
+              </td>
+              <td style={{fontWeight:900,color:'#dc2626',padding:'6px 10px'}}>{data.reduce((a,b)=>a+b.max,0)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const MotivBanner=({analytics,t})=>{
+  const pct=(analytics.distribution["80-100"]/analytics.totalStudents)*100;
+  let msg,color,bg;
+  if(pct>=60){msg=t.motivHigh;color='#065f46';bg='#d1fae5';}
+  else if(pct>=30){msg=t.motivMid;color='#92400e';bg='#fef3c7';}
+  else{msg=t.motivLow;color='#991b1b';bg='#fee2e2';}
+  return <div className="motiv-banner" style={{color,background:bg}}>💡 {msg}</div>;
+};
+
+function doExportDocx(data){
+  const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,AlignmentType,HeadingLevel}=docx;
+  const t=data.t;
+  const mp=(txt)=>new Paragraph({children:[new TextRun({text:String(txt),size:22})]});
+  const mh=(txt,c)=>new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:txt,bold:true,size:28,color:c||'1d4ed8'})]});
+  const mc=(txt,bold,fill)=>new TableCell({
+    shading:fill?{fill}:undefined,
+    children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:String(txt),bold:!!bold,size:20})]})]
+  });
+  const doc2=new Document({sections:[{properties:{},children:[
+    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.mainTitle,bold:true,size:44,color:'ea580c'})]}),
+    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.mainSub,size:26,color:'92400e'})]}),
+    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.planTitle,size:28,bold:true})]}),
+    new Paragraph({}),
+    mh('1. '+t.distSection),
+    mp(t.totalStudents+': '+data.analytics.totalStudents),
+    mp(t.intensive+': '+data.analytics.distribution["0-40"]),
+    mp(t.strategic+': '+data.analytics.distribution["40-60"]),
+    mp('60-80: '+data.analytics.distribution["60-80"]),
+    mp('80-100: '+data.analytics.distribution["80-100"]),
+    mp(t.avgLabel+': '+data.analytics.average.toFixed(1)),
+    new Paragraph({}),
+    mh('2. '+t.timeframe,'7c3aed'),
+    mp(t.workPeriod+': '+(data.plan.period||t.notSet)),
+    mp(t.weeklyHours+': '+(data.plan.hours||t.notSet)),
+    mp(t.evalMethod+': '+(data.plan.assessment||t.notSet)),
+    mp(t.reEvalDate+': '+(data.plan.reEvalDate||t.notSet)),
+    mp(t.availableRes+': '+(data.plan.resources||t.notSet)),
+    new Paragraph({}),
+    mh('3. '+t.strategiesTitle,'ea580c'),
+    new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:[
+      new TableRow({children:[mc(t.groupTarget,true,'dbeafe'),mc(t.strategy,true,'dbeafe')]}),
+      new TableRow({children:[mc(t.intensiveGroup,true,'fee2e2'),mc(t.intensiveStr)]}),
+      new TableRow({children:[mc(t.strategicGroup,true,'fef9c3'),mc(t.strategicStr)]}),
+      new TableRow({children:[mc(t.enrichGroup,true,'dcfce7'),mc(t.enrichStr)]}),
+    ]}),
+    new Paragraph({}),
+    mp(t.mainTitle+' — '+new Date().toLocaleDateString()),
+  ]}]});
+  Packer.toBlob(doc2).then(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='plan_'+(data.teacher.grade||'class')+'.docx';
+    a.click();
+  });
+}
+
+function doExportPDF(){
+  const el=document.getElementById('plan-print-area');
+  if(!el){return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  doc.html(el,{callback:d=>d.save('intervention_plan.pdf'),x:8,y:8,width:194,windowWidth:820,autoPaging:'text'});
+}
+
+/* ══ MAIN APP ══ */
+const App=()=>{
+  const dr=ld();
+  const [lang,setLang]=useState(dr.lang||null);
+  const [subject,setSubject]=useState(dr.subject||null);
+  const [phase,setPhase]=useState(dr.phase||0);
+  const [teacher,setTeacher]=useState(dr.teacher||{name:'',grade:'',date:''});
+  const [tableRaw,setTableRaw]=useState(dr.tableRaw||'');
+  const [parsedQ,setParsedQ]=useState(dr.parsedQ||[]);
+  const [gradesRaw,setGradesRaw]=useState(dr.gradesRaw||'');
+  const [analytics,setAnalytics]=useState(dr.analytics||null);
+  const [plan,setPlan]=useState(dr.plan||{resources:'',period:'',hours:'',assessment:'',reEvalDate:''});
+  const [showPlan,setShowPlan]=useState(false);
+  const [savedMsg,setSavedMsg]=useState(false);
+  const [showCompare,setShowCompare]=useState(false);
+  const [compareRaw,setCompareRaw]=useState('');
+  const [compareAna,setCompareAna]=useState(null);
+
+  const chartRef=useRef(null);
+  const canvasRef=useRef(null);
+  const cmpChartRef=useRef(null);
+  const cmpCanvasRef=useRef(null);
+
+  const t=UI[lang||'ar'];
+  const dir=(lang==='ar'||lang==='he')?'rtl':'ltr';
+  const sm=subject?SUBJECT_META[subject]:null;
+
+  const handleSave=()=>{
+    sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan});
+    setSavedMsg(true);setTimeout(()=>setSavedMsg(false),2000);
+  };
+
+  const BackBtn=({to,label})=>(
+    <button onClick={()=>{setPhase(to);setShowPlan(false);setSubject(to===0?null:subject);}}
+      className="no-print"
+      style={{
+        display:'inline-flex',alignItems:'center',gap:'8px',
+        padding:'10px 22px',borderRadius:'14px',
+        background:'linear-gradient(135deg,#1e3a5f,#0f2749)',
+        color:'white',fontWeight:700,fontSize:'1rem',
+        border:'none',cursor:'pointer',
+        boxShadow:'0 4px 14px rgba(15,39,73,.35)',
+        transition:'all .2s'
+      }}
+      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 20px rgba(15,39,73,.45)';}}
+      onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='0 4px 14px rgba(15,39,73,.35)';}}>
+      <span style={{fontSize:'1.1rem'}}>{dir==='rtl'?'→':'←'}</span>
+      {label||t.back}
+    </button>
+  );
+  const SaveBtn=()=>(
+    <button onClick={handleSave}
+      className="no-print" style={{padding:"10px 20px",borderRadius:"12px",border:"2px solid",borderColor:savedMsg?"#4ade80":"#d1d5db",color:savedMsg?"#16a34a":"#6b7280",background:savedMsg?"#f0fdf4":"white",fontWeight:700,fontSize:"1rem",cursor:"pointer"}}>
+      {savedMsg?`\u2713 ${t.saved}`:t.save}
+    </button>
+  );
+
+  useEffect(()=>{
+    if(phase===3&&analytics&&canvasRef.current){
+      if(chartRef.current) chartRef.current.destroy();
+      chartRef.current=new Chart(canvasRef.current.getContext('2d'),{
+        type:'doughnut',
+        data:{labels:['0-40','40-60','60-80','80-100'],datasets:[{data:[analytics.distribution["0-40"],analytics.distribution["40-60"],analytics.distribution["60-80"],analytics.distribution["80-100"]],backgroundColor:['#ef4444','#f59e0b','#3b82f6','#10b981'],hoverOffset:8}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:14}}}}
+      });
+    }
+  },[phase,analytics]);
+
+  useEffect(()=>{
+    if(compareAna&&cmpCanvasRef.current){
+      if(cmpChartRef.current) cmpChartRef.current.destroy();
+      cmpChartRef.current=new Chart(cmpCanvasRef.current.getContext('2d'),{
+        type:'bar',
+        data:{
+          labels:['0-40','40-60','60-80','80-100'],
+          datasets:[
+            {label:t.exam1,data:[analytics.distribution["0-40"],analytics.distribution["40-60"],analytics.distribution["60-80"],analytics.distribution["80-100"]],backgroundColor:'rgba(59,130,246,.7)',borderRadius:6},
+            {label:t.exam2,data:[compareAna.distribution["0-40"],compareAna.distribution["40-60"],compareAna.distribution["60-80"],compareAna.distribution["80-100"]],backgroundColor:'rgba(249,115,22,.7)',borderRadius:6}
+          ]
+        },
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}
+      });
+    }
+  },[compareAna]);
+
+  const generateExcel=()=>{
+    const data=parseMD(tableRaw);
+    if(!data){
+      // Show detailed help
+      const msg = t.badTable + '\n\n' + (
+        t.badTableHelp ||
+        'Example format:\n| Section | Q | Bloom Skill | Content Skill | Score |\n|---|---|---|---|---|\n| A | 1 | Understand | Reading | 10 |'
+      );
+      alert(msg);
+      return;
+    }
+    setParsedQ(data);
+    const wb=XLSX.utils.book_new();
+    let totalMax=0;
+    const r1=[t.subjects[subject]||subject],r2=['Q#'],r3=['Core Skill (Bloom)'],r4=['Secondary Skill'],r5=['Max'];
+    data.forEach(q=>{r1.push(q.section);r2.push(q.qNum);r3.push(q.bloomSkill||'');r4.push(q.contentSkill||'');r5.push(q.max);totalMax+=q.max;});
+    r1.push('');r2.push('');r3.push('');r4.push('');r5.push('Total');
+    if(totalMax!==100) r5.push('/100');
+    const rows=[r1,r2,r3,r4,r5];
+    for(let i=0;i<35;i++){const r=[`Student ${i+1}`];for(let j=0;j<data.length;j++) r.push('');rows.push(r);}
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    // Student data starts at row 6 (5 header rows), score columns start after the 5 row-header cols
+    for(let i=6;i<=40;i++){
+      const sc=XLSX.utils.encode_col(5),ec=XLSX.utils.encode_col(4+data.length),tc=XLSX.utils.encode_col(5+data.length);
+      ws[tc+i]={t:'n',f:`SUM(${sc}${i}:${ec}${i})`};
+      if(totalMax!==100){const xc=XLSX.utils.encode_col(6+data.length);ws[xc+i]={t:'n',f:`(${tc}${i}/${totalMax})*100`};}
+    }
+    XLSX.utils.book_append_sheet(wb,ws,'Screening');
+    XLSX.writeFile(wb,`ClassScan_${teacher.grade||'class'}.xlsx`);
+  };
+
+  const analyzeData=()=>{
+    const scores=parseScores(gradesRaw);
+    if(!scores.length){alert(t.noData);return;}
+    const dist=buildDist(scores);
+    setAnalytics({scores,distribution:dist,totalStudents:scores.length,average:avg(scores)});
+    setPhase(3);handleSave();
+  };
+
+  const doCompare=()=>{
+    const sc=parseScores(compareRaw);
+    if(!sc.length){alert(t.noData);return;}
+    setCompareAna({scores:sc,distribution:buildDist(sc),totalStudents:sc.length,average:avg(sc)});
+  };
+
+  const exportLists=()=>{
+    if(!analytics) return;
+    const wb=XLSX.utils.book_new();
+    const mk=(label,min,max)=>{
+      const filtered=analytics.scores.filter(s=>s>=min&&s<=max);
+      const rows=[[label],[`Range: ${min}-${max}`],['#','Score']];
+      filtered.forEach((s,i)=>rows.push([i+1,s]));
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb,ws,label.substring(0,28));
+    };
+    mk(t.listInt,0,40);mk(t.listStr,41,60);mk(t.listEnr,80,100);
+    XLSX.writeFile(wb,`groups_${teacher.grade||'class'}.xlsx`);
+  };
+
+  const promptText=subject?(PROMPTS[subject]?.[lang]||PROMPTS[subject]?.ar):'';
+
+  /* ═══ SPLASH ═══ */
+  if(!lang) return(
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="max-w-lg w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
+        <SiteHeader t={UI.ar}/>
+        <div className="p-8 text-center">
+          <p className="text-gray-600 font-semibold mb-6 text-base">{UI.ar.splashLabel} / {UI.he.splashLabel} / {UI.en.splashLabel}</p>
+          <div className="flex gap-3">
+            {[['ar',UI.ar.langBtns.ar,'#3b82f6'],['he',UI.he.langBtns.he,'#8b5cf6'],['en',UI.en.langBtns.en,'#f59e0b']].map(([l,lbl,c])=>(
+              <button key={l} onClick={()=>setLang(l)}
+                className="flex-1 py-4 rounded-2xl text-white font-bold text-lg shadow-lg hover:opacity-90 transition cursor-pointer"
+                style={{background:`linear-gradient(135deg,${c},${c}bb)`}}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ═══ SUBJECT PICK ═══ */
+  if(!subject) return(
+    <div className="min-h-screen flex items-center justify-center p-4" dir={dir}>
+      <div className="max-w-2xl w-full bg-white/95 rounded-3xl shadow-2xl overflow-hidden fade-in">
+        <SiteHeader t={t}/>
+        <div className="p-8">
+          <button onClick={()=>setLang(null)} className="no-print" style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'10px 22px',borderRadius:'14px',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(15,39,73,.35)',marginBottom:'20px'}}>
+            <span>{dir==='rtl'?'→':'←'}</span> {t.back}
+          </button>
+          <div className="text-center mb-2">
+            <h2 className="text-2xl font-black text-gray-800">{t.pickSubject}</h2>
+            <p className="text-gray-400 text-sm mt-1">{t.subjectHint}</p>
+          </div>
+          <SubjectPicker selected={subject} onChange={s=>{setSubject(s);setPhase(1);}} t={t}/>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ═══ WORKFLOW ═══ */
+  return(
+    <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%)'}} dir={dir}>
+      <div style={{maxWidth:'900px',margin:'0 auto',background:'rgba(255,255,255,.97)',boxShadow:'0 4px 40px rgba(0,0,0,.15)',borderRadius:'0 0 24px 24px',minHeight:'100vh'}}>
+        <MiniHeader t={t}/>
+        <div style={{padding:'0 32px 56px'}}>
+          <StepBar phase={phase} t={t}/>
+
+          {/* ── Phase 1: Teacher Info ── */}
+          {phase===1&&(
+            <div className="fade-in space-y-6">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"16px",borderBottom:"2px solid #f1f5f9"}}><BackBtn to={0}/><SaveBtn/></div>
+              <h2 style={{fontSize:"1.6rem",fontWeight:900,color:"#1e3a5f",marginBottom:"8px"}}>{t.step1}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {[['name',t.teacherName,'text',''],['grade',t.gradeLabel,'text',''],['date',t.examDate,'date','']].map(([k,lbl,type,ph])=>(
+                  <div key={k}>
+                    <label style={{display:"block",fontSize:"1rem",fontWeight:700,color:"#374151",marginBottom:"6px"}}>{lbl}</label>
+                    <input type={type} value={teacher[k]} placeholder={ph}
+                      onChange={e=>setTeacher({...teacher,[k]:e.target.value})}
+                      style={{width:"100%",padding:"14px 16px",borderRadius:"14px",border:"2px solid #e5e7eb",outline:"none",fontSize:"1.05rem",fontFamily:"Cairo,sans-serif",transition:"border-color .2s"}}
+                      onFocus={e=>e.target.style.borderColor="#f97316"}
+                      onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
+                  </div>
+                ))}
+                <div>
+                  <label style={{display:"block",fontSize:"1rem",fontWeight:700,color:"#374151",marginBottom:"6px"}}>{t.subjectLabel}</label>
+                  <div style={{padding:"14px 16px",borderRadius:"14px",border:"2px solid #e5e7eb",background:"#f9fafb",fontWeight:700,fontSize:"1.05rem",display:"flex",alignItems:"center",gap:"10px",color:sm.color}}>
+                    {sm.icon} {t.subjects[subject]}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <button onClick={()=>{setSubject(null);setParsedQ([]);}} className="text-sm text-gray-400 hover:text-orange-500 no-print">
+                  🔄 {t.pickSubject}
+                </button>
+                <button onClick={()=>{
+                  if(!teacher.name||!teacher.grade||!teacher.date){alert(t.fillAll);return;}
+                  setPhase(2);handleSave();
+                }} className="glow-orange bg-gradient-to-r from-orange-500 to-amber-400 text-white font-bold px-8 py-3 rounded-full cursor-pointer">
+                  {t.next} {dir==='rtl'?'←':'→'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Phase 2: Exam Structure ── */}
+          {phase===2&&(
+            <div className="fade-in space-y-6">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"16px",borderBottom:"2px solid #f1f5f9"}}><BackBtn to={1}/><SaveBtn/></div>
+              <div className="rounded-2xl border-2 p-5" style={{borderColor:sm.border,background:sm.bg}}>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h3 style={{fontSize:"1.2rem",fontWeight:800,color:sm.color}}>{t.promptTitle}</h3>
+                    <p style={{fontSize:".9rem",color:"#6b7280",marginTop:"4px"}}>{t.promptDesc}</p>
+                  </div>
+                  <CopyBtn text={promptText} t={t}/>
+                </div>
+                <pre className="bg-white border rounded-xl p-4 text-sm font-mono text-gray-700 whitespace-pre-wrap select-all"
+                  style={{borderColor:sm.border,direction:'ltr',textAlign:'left'}}>{promptText}</pre>
+                <div className="mt-3 flex flex-wrap gap-2 items-center">
+                  <span className="text-xs text-gray-500 font-semibold">{t.aiTools}</span>
+                  {[['ChatGPT','https://chat.openai.com'],['Claude','https://claude.ai'],['Gemini','https://gemini.google.com'],['Copilot','https://copilot.microsoft.com']].map(([n,u])=>(
+                    <a key={n} href={u} target="_blank" className="text-xs px-2 py-1 rounded-lg bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 transition font-medium">{n} ↗</a>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:"1rem",fontWeight:700,color:"#374151",marginBottom:"8px"}}>{t.pasteTable}</label>
+                <textarea rows="6" value={tableRaw} onChange={e=>setTableRaw(e.target.value)}
+                  style={{width:"100%",padding:"14px 16px",borderRadius:"14px",border:"2px solid #e5e7eb",outline:"none",fontFamily:"monospace",fontSize:"1rem",background:"#f9fafb",direction:"ltr",textAlign:"left"}}/>
+              </div>
+              {parsedQ.length>0&&<TablePreview data={parsedQ} t={t} lang={lang}/>}
+              <button onClick={generateExcel} className="glow-teal w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold text-lg py-4 rounded-2xl cursor-pointer">
+                📊 {t.generateExcel}
+              </button>
+              {parsedQ.length>0&&(
+                <div className="mt-2 p-5 rounded-2xl bg-amber-50 border border-amber-200 fade-in">
+                  <p style={{fontSize:"1rem",fontWeight:700,color:"#92400e",marginBottom:"12px"}}>✅ {t.excelOk}</p>
+                  <label style={{display:"block",fontSize:"1rem",fontWeight:700,color:"#374151",marginBottom:"8px"}}>{t.pasteData}</label>
+                  <textarea rows="7" value={gradesRaw} onChange={e=>setGradesRaw(e.target.value)}
+                    style={{width:"100%",padding:"14px 16px",borderRadius:"14px",border:"2px solid #fcd34d",outline:"none",fontFamily:"monospace",fontSize:"1rem",background:"white",direction:"ltr",textAlign:"left"}}/>
+                  <button onClick={analyzeData} className="glow-purple mt-3 w-full bg-gradient-to-r from-violet-500 to-pink-500 text-white font-bold py-3 rounded-2xl cursor-pointer">
+                    📈 {t.analyzeBtn}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Phase 3: Analysis + Plan ── */}
+          {phase===3&&analytics&&(
+            <div className="fade-in space-y-8">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"16px",borderBottom:"2px solid #f1f5f9"}} className="no-print"><BackBtn to={2}/><SaveBtn/></div>
+              <MotivBanner analytics={analytics} t={t}/>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 text-center mb-4">{t.dist}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
+                  <div className="h-64 bg-gray-50 rounded-2xl border p-3"><canvas ref={canvasRef}></canvas></div>
+                  <div className="rounded-2xl border overflow-hidden">
+                    <table className="w-full text-center text-sm">
+                      <thead className="bg-gray-100">
+                        <tr><th className="py-2 px-3">{t.range}</th><th className="py-2 px-3">{t.count}</th><th className="py-2 px-3">{t.pct}</th></tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {[["0-40","ef4444","fee2e2"],["40-60","f59e0b","fef9c3"],["60-80","3b82f6","eff6ff"],["80-100","10b981","dcfce7"]].map(([r,c,bg])=>(
+                          <tr key={r} style={{background:`#${bg}`}}>
+                            <td className="py-2 font-bold" style={{color:`#${c}`}}>{r}</td>
+                            <td className="py-2 font-bold">{analytics.distribution[r]}</td>
+                            <td className="py-2 font-semibold" style={{color:`#${c}`}}>{((analytics.distribution[r]/analytics.totalStudents)*100).toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="bg-gray-50 px-4 py-2 text-xs text-center font-bold text-gray-500 flex justify-around">
+                      <span>{t.totalStudents}: <strong>{analytics.totalStudents}</strong></span>
+                      <span>{t.avgLabel}: <strong>{analytics.average.toFixed(1)}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3 no-print">
+                <button onClick={exportLists} className="glow-teal px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold cursor-pointer">
+                  📋 {t.exportList}
+                </button>
+                <button onClick={()=>setShowCompare(!showCompare)} className="px-5 py-2 rounded-xl border-2 border-blue-400 text-blue-600 text-sm font-bold hover:bg-blue-50 transition cursor-pointer">
+                  🔄 {t.compareBtn}
+                </button>
+              </div>
+              {showCompare&&(
+                <div className="p-5 bg-blue-50 border border-blue-200 rounded-2xl fade-in no-print">
+                  <h3 className="font-bold text-blue-700 mb-3">{t.compareTitle}</h3>
+                  <textarea rows="5" value={compareRaw} onChange={e=>setCompareRaw(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-blue-200 outline-none text-sm font-mono mb-3"
+                    placeholder={t.compareHint} style={{direction:'ltr',textAlign:'left'}}/>
+                  <button onClick={doCompare} className="glow-blue px-6 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm cursor-pointer">{t.analyzeBtn}</button>
+                  {compareAna&&(
+                    <div className="mt-4">
+                      <div className="h-52 bg-white rounded-xl border p-3"><canvas ref={cmpCanvasRef}></canvas></div>
+                      <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
+                        <div className="bg-blue-100 rounded-xl p-3 text-center">
+                          <div className="font-bold text-blue-700">{t.exam1}</div>
+                          <div className="text-2xl font-black text-blue-900">{analytics.average.toFixed(1)}</div>
+                          <div className="text-xs text-blue-500">{t.avgLabel}</div>
+                        </div>
+                        <div className="bg-orange-100 rounded-xl p-3 text-center">
+                          <div className="font-bold text-orange-700">{t.exam2}</div>
+                          <div className="text-2xl font-black text-orange-900">{compareAna.average.toFixed(1)}</div>
+                          <div className="text-xs text-orange-500">{t.avgLabel}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!showPlan&&(
+                <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-6 space-y-4 no-print">
+                  <h3 style={{fontSize:"1.4rem",fontWeight:800,color:"#1e3a5f",marginBottom:"4px"}}>{t.interventionTitle}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[['resources',t.resources,t.resourcesHint,'text','md:col-span-2'],['period',t.period,t.periodHint,'text',''],['hours',t.hours,t.hoursHint,'text',''],['assessment',t.assessment,t.assessmentHint,'text',''],['reEvalDate',t.reEval,'','date','']].map(([k,lbl,ph,type,ex])=>(
+                      <div key={k} className={ex}>
+                        <label style={{display:"block",fontSize:"1rem",fontWeight:700,color:"#374151",marginBottom:"6px"}}>{lbl}</label>
+                        <input type={type} value={plan[k]} placeholder={ph}
+                          onChange={e=>setPlan({...plan,[k]:e.target.value})}
+                          style={{width:"100%",padding:"13px 16px",borderRadius:"13px",border:"2px solid #e5e7eb",outline:"none",fontSize:"1rem",fontFamily:"Cairo,sans-serif"}}
+                          onFocus={e=>e.target.style.borderColor="#f97316"}
+                          onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={()=>setShowPlan(true)} className="glow-orange w-full bg-gradient-to-r from-gray-800 to-gray-700 text-white font-bold py-3 rounded-xl cursor-pointer">
+                    ✨ {t.generatePlan}
+                  </button>
+                </div>
+              )}
+              {showPlan&&(
+                <div id="plan-print-area" className="bg-white rounded-2xl border shadow-sm p-6 md:p-8 space-y-6 fade-in print-ok" dir={dir}>
+                  <div className="flex flex-wrap gap-3 justify-end no-print">
+                    <button onClick={()=>setShowPlan(false)} style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'10px 22px',borderRadius:'14px',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(15,39,73,.35)'}}>
+                      <span>{dir==='rtl'?'→':'←'}</span> {t.back}
+                    </button>
+                    <button onClick={()=>doExportDocx({t,analytics,plan,teacher})} className="glow-blue px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold cursor-pointer">📄 {t.downloadDocx}</button>
+                    <button onClick={doExportPDF} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition cursor-pointer">📑 {t.downloadPdf}</button>
+                    <button onClick={()=>window.print()} className="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-bold hover:bg-gray-700 transition cursor-pointer">🖨️ {t.print}</button>
+                  </div>
+                  <div className="text-center border-b-2 border-orange-100 pb-5" style={{background:'linear-gradient(135deg,#fff7ed,#fff)',borderRadius:'16px',padding:'24px'}}>
+                    <img src={LOGO} alt="logo" style={{width:'58px',height:'58px',borderRadius:'12px',objectFit:'cover',margin:'0 auto 10px'}} onError={e=>e.target.style.display='none'}/>
+                    <div style={{fontSize:'1.4rem',fontWeight:900,color:'#ea580c'}}>{t.mainTitle}</div>
+                    <div style={{fontSize:'.82rem',fontWeight:700,color:'#92400e',marginTop:'4px'}}>{t.mainSub}</div>
+                    <div style={{fontSize:'1.05rem',fontWeight:700,color:'#1f2937',marginTop:'10px'}}>{t.planTitle}</div>
+                    <div style={{fontSize:'.78rem',color:'#6b7280',marginTop:'4px'}}>{teacher.grade} — {t.subjects[subject]} — {teacher.date}</div>
+                    <div style={{fontSize:'.73rem',color:'#9ca3af'}}>{teacher.name}</div>
+                  </div>
+                  <section>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#1d4ed8',borderBottom:'2px solid #dbeafe',paddingBottom:'6px',marginBottom:'10px'}}>1. {t.distSection}</h3>
+                    <ul style={{listStyle:'none',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',fontSize:'.88rem'}}>
+                      {[['📊 '+t.totalStudents,analytics.totalStudents,'#374151'],['🔴 '+t.intensive,analytics.distribution["0-40"],'#dc2626'],['🟡 '+t.strategic,analytics.distribution["40-60"],'#d97706'],['🔵 60-80',analytics.distribution["60-80"],'#1d4ed8'],['🟢 80-100',analytics.distribution["80-100"],'#059669'],['📈 '+t.avgLabel,analytics.average.toFixed(1),'#374151']].map(([lbl,val,c])=>(
+                        <li key={lbl} style={{background:'#f9fafb',borderRadius:'10px',padding:'8px 12px',color:c}}><strong>{lbl}:</strong> {val}</li>
+                      ))}
+                    </ul>
+                  </section>
+                  <section>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#7c3aed',borderBottom:'2px solid #ede9fe',paddingBottom:'6px',marginBottom:'10px'}}>2. {t.timeframe}</h3>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',fontSize:'.85rem'}}>
+                      {[[t.workPeriod,plan.period||t.notSet],[t.weeklyHours,plan.hours||t.notSet],[t.evalMethod,plan.assessment||t.notSet],[t.reEvalDate,plan.reEvalDate||t.notSet],[t.availableRes,plan.resources||t.notSet]].map(([k,v])=>(
+                        <div key={k} style={{background:'#faf5ff',borderRadius:'10px',padding:'10px 12px',border:'1px solid #ede9fe'}}>
+                          <div style={{fontWeight:700,color:'#6d28d9',fontSize:'.78rem'}}>{k}</div>
+                          <div style={{color:'#1f2937',marginTop:'3px'}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#ea580c',borderBottom:'2px solid #fed7aa',paddingBottom:'6px',marginBottom:'10px'}}>3. {t.strategiesTitle}</h3>
+                    <div style={{overflowX:'auto'}}>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.83rem'}}>
+                        <thead>
+                          <tr style={{background:'#f1f5f9'}}>
+                            <th style={{border:'1px solid #e5e7eb',padding:'10px',width:'28%',textAlign:'center'}}>{t.groupTarget}</th>
+                            <th style={{border:'1px solid #e5e7eb',padding:'10px',textAlign:'start'}}>{t.strategy}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[[t.intensiveGroup,'#dc2626','#fee2e2',t.intensiveStr],[t.strategicGroup,'#d97706','#fef9c3',t.strategicStr],[t.enrichGroup,'#059669','#dcfce7',t.enrichStr]].map(([grp,c,bg,str])=>(
+                            <tr key={grp} style={{background:bg}}>
+                              <td style={{border:'1px solid #e5e7eb',padding:'10px',fontWeight:700,textAlign:'center',color:c}}>{grp}</td>
+                              <td style={{border:'1px solid #e5e7eb',padding:'10px',color:'#374151'}}>{str}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                  <p style={{fontSize:'.72rem',color:'#9ca3af',textAlign:'center',paddingTop:'8px'}}>{t.mainTitle} — {new Date().toLocaleDateString()}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="no-print" style={{marginTop:"40px",paddingTop:"16px",borderTop:"1px solid #f1f5f9",textAlign:"center",fontSize:".8rem",color:"#9ca3af"}}>{t.mainTitle} — v3.2</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>
