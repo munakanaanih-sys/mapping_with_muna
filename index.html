@@ -526,16 +526,22 @@ function parseScores(raw){
 function avg(sc){return sc.length?sc.reduce((a,b)=>a+b,0)/sc.length:0;}
 
 /* ═══════════ BANDS (performance ranges) ═══════════ */
-const BAND_STRONG = {
-  4:['#dc2626','#ea580c','#ca8a04','#16a34a'],
-  5:['#dc2626','#ea580c','#ca8a04','#65a30d','#16a34a'],
-  6:['#b91c1c','#dc2626','#ea580c','#ca8a04','#65a30d','#16a34a']
-};
-const BAND_LIGHT = {
-  4:['FDE2E2','FFE5CC','FFF4C2','D9F2DC'],
-  5:['FDE2E2','FFE5CC','FFF4C2','EAF5D3','D9F2DC'],
-  6:['F9CFCF','FDE2E2','FFE5CC','FFF4C2','EAF5D3','D9F2DC']
-};
+/* traffic-light gradient: red (lowest) → yellow → green (highest), Excel's classic scale */
+const TL_FILL=['F8696B','FFEB84','63BE7B'];
+const TL_TEXT=['B91C1C','A16207','15803D'];
+function lerpHex(a,b,t){
+  const pa=[0,2,4].map(i=>parseInt(a.substr(i,2),16)), pb=[0,2,4].map(i=>parseInt(b.substr(i,2),16));
+  return pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+function traffic(t,stops){
+  t=Math.max(0,Math.min(1,t));
+  return t<=0.5?lerpHex(stops[0],stops[1],t*2):lerpHex(stops[1],stops[2],(t-0.5)*2);
+}
+function bandT(bands,i){return bands.length>1?i/(bands.length-1):1;}
+function bandLight(bands,i){return traffic(bandT(bands,i),TL_FILL);}               // cell fill (no #)
+function bandSoft(bands,i){return lerpHex(bandLight(bands,i),'FFFFFF',0.6);}         // pale version for web backgrounds
+function bandColor(bands,i){return '#'+traffic(bandT(bands,i),TL_TEXT);}            // strong text / chart color
+
 const BAND_PRESETS = {
   ar:{
     4:[['تحت المستوى',0],['متوسط ضعيف',55],['متوسط',65],['جيد جدًا',85]],
@@ -553,146 +559,176 @@ const BAND_PRESETS = {
     6:[['Very weak',0],['Weak',40],['Low average',55],['Average',65],['Good',75],['Excellent',90]]
   }
 };
+/* a band list is [{name,min}], and the last band also carries max (the top of the scale) */
 function presetBands(lang,n){
   const p=(BAND_PRESETS[lang]||BAND_PRESETS.ar)[n]||BAND_PRESETS.ar[4];
-  return p.map(([name,min])=>({name,min}));
+  const b=p.map(([name,min])=>({name,min}));
+  b[b.length-1].max=100;
+  return b;
 }
-function bandColor(bands,i){return (BAND_STRONG[bands.length]||BAND_STRONG[4])[i]||'#6b7280';}
-function bandLight(bands,i){return (BAND_LIGHT[bands.length]||BAND_LIGHT[4])[i]||'F3F4F6';}
-function bandUpper(bands,i){return i<bands.length-1?bands[i+1].min:100;}
+function bandTop(bands){const m=bands[bands.length-1].max;return (m===undefined||m===null||m==='')?100:Number(m);}
+function bandUpper(bands,i){return i<bands.length-1?Number(bands[i+1].min):bandTop(bands);}
+/* scores below the lowest bound count in the first band, scores above the top in the last band */
 function bandIndex(score,bands){
   let idx=0;
-  for(let i=0;i<bands.length;i++){ if(score>=bands[i].min) idx=i; }
+  for(let i=1;i<bands.length;i++){ if(score>=Number(bands[i].min)) idx=i; }
   return idx;
 }
 /* returns null if valid, otherwise an error key */
 function validateBands(bands){
   if(!Array.isArray(bands)||bands.length<4||bands.length>6) return 'count';
-  if(Number(bands[0].min)!==0) return 'first';
   for(let i=0;i<bands.length;i++){
     const b=bands[i];
     if(!String(b.name||'').trim()) return 'name';
     const m=Number(b.min);
-    if(b.min===''||isNaN(m)||m<0||m>=100) return 'range';
+    if(b.min===''||b.min===null||isNaN(m)||m<0||m>=100) return 'range';
     if(i>0&&m<=Number(bands[i-1].min)) return 'order';
+  }
+  const last=bands[bands.length-1], top=last.max;
+  if(top!==undefined&&top!==null){
+    const t=Number(top);
+    if(top===''||isNaN(t)||t>100||t<=Number(last.min)) return 'top';
   }
   return null;
 }
-function bandRangeLabel(bands,i){
-  const lo=bands[i].min, hi=bandUpper(bands,i);
-  return `${lo} – ${hi}`;
-}
+function bandRangeLabel(bands,i){return `${Number(bands[i].min)} – ${bandUpper(bands,i)}`;}
 function buildDist(scores,bands){
   const counts=bands.map(()=>0);
   scores.forEach(s=>{counts[bandIndex(s,bands)]++;});
   return counts;
+}
+/* default class names: <grade> أ / ב / A ... */
+const CLASS_LETTERS={ar:['أ','ب','ج','د','هـ','و','ز','ح','ط','ي','ك','ل'],he:['א','ב','ג','ד','ה','ו','ז','ח','ט','י','יא','יב'],en:['A','B','C','D','E','F','G','H','I','J','K','L']};
+function defaultClassNames(lang,n,base){
+  const L=CLASS_LETTERS[lang]||CLASS_LETTERS.ar;
+  const b=String(base||'').trim()||({ar:'الصف',he:'כיתה',en:'Class'}[lang]||'الصف');
+  if(n<=1) return [b];
+  return Array.from({length:n},(_,i)=>`${b} ${L[i]||i+1}`);
+}
+/* Excel sheet names: ≤31 chars, no []:*?/\ , unique */
+function sheetSafeNames(names,reserved){
+  const used=new Set((reserved||[]).map(s=>s.toLowerCase()));
+  return names.map((n,i)=>{
+    let s=String(n||'').replace(/[\[\]:*?\/\\]/g,' ').replace(/^'+|'+$/g,'').trim().substring(0,28)||`#${i+1}`;
+    let base=s,k=2;
+    while(used.has(s.toLowerCase())){s=`${base.substring(0,25)} (${k++})`;}
+    used.add(s.toLowerCase());
+    return s;
+  });
 }
 
 /* ═══════════ EXCEL STRINGS ═══════════ */
 const XL = {
   ar:{
     rtl:true,
-    shGuide:'تعليمات', shGrades:'رصد العلامات', shExam:'تحليل الامتحان', shSummary:'ملخص النتائج', shBands:'المجالات',
-    title:'رصد علامات المسح الصفي', teacher:'المعلم/ة', grade:'الصف', date:'التاريخ', subject:'المادة',
+    shGuide:'تعليمات', shExam:'تحليل الامتحان', shSummary:'ملخص النتائج', shAll:'تحليل جميع الصفوف', shBands:'المجالات',
+    title:'رصد علامات المسح الصفي', teacher:'المعلم/ة', grade:'الصف', date:'التاريخ', subject:'المادة', classLbl:'الصف',
     section:'القسم', qNum:'رقم السؤال', bloom:'مهارة بلوم', topic:'موضوع السؤال', max:'العلامة القصوى',
     num:'#', student:'اسم الطالب', total:'المجموع', pct:'النسبة %', level:'المستوى',
-    qAvgPct:'معدل السؤال (من 100)', qAvgPts:'معدل العلامة', answered:'عدد الطلاب', helper:'مساعد',
-    studentAvg:'معدل الطلاب %', totalRow:'المجموع',
+    qAvgPct:'معدل السؤال (من 100)', qAvgPts:'معدل العلامة',
+    allClasses:'جميع الصفوف', overallPct:'المعدل العام %', totalRow:'المجموع', indicator:'المؤشر',
     kpi:'مؤشرات عامة', nStudents:'عدد الطلاب الممتحنين', classAvg:'المعدل العام', highest:'أعلى علامة', lowest:'أدنى علامة', median:'الوسيط', stdev:'الانحراف المعياري',
-    distTitle:'توزيع الطلاب على المجالات', band:'المجال', from:'من', to:'إلى (أقل من)', count:'عدد الطلاب', share:'النسبة %', chart:'تمثيل بياني',
-    byBloom:'التحصيل حسب مهارات بلوم', byTopic:'التحصيل حسب موضوع السؤال', bySection:'التحصيل حسب القسم', qCount:'عدد الأسئلة', maxSum:'مجموع العلامات', avgPct:'معدل التحصيل %',
-    weakest:'أضعف 3 أسئلة', strongest:'أقوى 3 أسئلة', question:'السؤال',
-    bandsTitle:'مجالات توزيع العلامات', bandsNote:'يمكنك تعديل أسماء المجالات وحدودها الدنيا هنا (بترتيب تصاعدي يبدأ من 0)، وستتحدث كل الحسابات والألوان تلقائيًا.',
-    minCol:'الحد الأدنى', colorCol:'اللون',
-    errTitle:'علامة غير صحيحة', errMsg:'العلامة يجب أن تكون بين 0 والعلامة القصوى للسؤال.',
+    distTitle:'توزيع الطلاب على المجالات (عدد الطلاب)', distPctTitle:'توزيع الطلاب على المجالات (نسبة مئوية %)', band:'المجال', from:'من', to:'إلى', share:'النسبة %', chart:'تمثيل بياني',
+    byBloom:'التحصيل حسب مهارات بلوم (%)', byTopic:'التحصيل حسب موضوع السؤال (%)', bySection:'التحصيل حسب القسم (%)', qCount:'عدد الأسئلة', maxSum:'مجموع العلامات',
+    weakest:'أضعف 3 أسئلة (جميع الصفوف)', strongest:'أقوى 3 أسئلة (جميع الصفوف)', question:'السؤال', avgPct:'معدل التحصيل %',
+    bandsTitle:'مجالات توزيع العلامات',
+    bandsNote:'يمكنك تعديل أسماء المجالات وحدودها هنا، بما في ذلك الحد الأدنى للمجال الأول والحد الأعلى للمجال الأخير. تتحدث كل الحسابات والألوان تلقائيًا. العلامة الأقل من الحد الأدنى تُحسب ضمن المجال الأول، والأعلى من الحد الأعلى ضمن المجال الأخير.',
+    colorCol:'اللون', errTitle:'قيمة غير صحيحة', errMsg:'العلامة يجب أن تكون بين 0 والعلامة القصوى للسؤال.', bandErrMsg:'الحدود يجب أن تكون تصاعدية بين 0 و 100.',
     legend:'مفتاح الألوان:',
     guide:[
       ['كيف تستخدم/ين هذا الملف؟',''],
-      ['1','اذهب/ي إلى ورقة «رصد العلامات» واكتب/ي أسماء الطلاب في العمود الثاني.'],
+      ['1','لكل صف (شعبة) ورقة رصد خاصة تحمل اسمه. اكتب/ي أسماء الطلاب في العمود الثاني.'],
       ['2','أدخل/ي علامة كل طالب في كل سؤال. لا يمكن إدخال علامة أكبر من العلامة القصوى للسؤال.'],
       ['3','إذا لم يُجب الطالب عن سؤال، اكتب/ي 0. أمّا الطالب الغائب فاترك/ي صفه فارغًا بالكامل.'],
-      ['4','يُحسب المجموع والنسبة والمستوى تلقائيًا، وتتلون الخلايا حسب مفتاح الألوان.'],
-      ['5','ورقة «ملخص النتائج» تعرض التوزيع على المجالات والتحصيل حسب مهارات بلوم والأقسام والمواضيع.'],
-      ['6','لتغيير المجالات (أسماءها أو حدودها) استخدم/ي ورقة «المجالات».'],
-      ['7','بعد إدخال العلامات احفظ/ي الملف وارفع/يه إلى المنصة للحصول على التحليل وخطة التدخل.'],
+      ['4','يُحسب المجموع والنسبة والمستوى تلقائيًا، وتتلون الخلايا بألوان الرمزور: الأحمر للأدنى والأخضر للأعلى.'],
+      ['5','ورقة «%ALL%» تقارن بين الصفوف وتعرض النتائج الإجمالية: المؤشرات، التوزيع على المجالات، والتحصيل حسب بلوم والأقسام والمواضيع.'],
+      ['6','ورقة «تحليل الامتحان» تعرض معدل كل سؤال في كل صف وفي جميع الصفوف.'],
+      ['7','لتغيير المجالات (أسماءها أو حدودها) استخدم/ي ورقة «المجالات».'],
+      ['8','بعد إدخال العلامات احفظ/ي الملف وارفع/يه إلى المنصة للحصول على التحليل وخطة التدخل.'],
       ['ملاحظة','الخلايا المحسوبة محمية من التعديل غير المقصود (يمكن إلغاء الحماية من: مراجعة ← إلغاء حماية الورقة).']
     ]
   },
   he:{
     rtl:true,
-    shGuide:'הוראות', shGrades:'הזנת ציונים', shExam:'ניתוח המבחן', shSummary:'סיכום תוצאות', shBands:'טווחים',
-    title:'הזנת ציוני מבדק כיתתי', teacher:'מורה', grade:'כיתה', date:'תאריך', subject:'מקצוע',
+    shGuide:'הוראות', shExam:'ניתוח המבחן', shSummary:'סיכום תוצאות', shAll:'ניתוח כל הכיתות', shBands:'טווחים',
+    title:'הזנת ציוני מבדק כיתתי', teacher:'מורה', grade:'כיתה', date:'תאריך', subject:'מקצוע', classLbl:'כיתה',
     section:'פרק', qNum:'מספר שאלה', bloom:'מיומנות (בלום)', topic:'נושא השאלה', max:'ניקוד מרבי',
     num:'#', student:'שם התלמיד', total:'סה״כ', pct:'אחוז %', level:'רמה',
-    qAvgPct:'ממוצע שאלה (מ-100)', qAvgPts:'ממוצע ניקוד', answered:'מספר תלמידים', helper:'עזר',
-    studentAvg:'ממוצע תלמידים %', totalRow:'סה״כ',
-    kpi:'מדדים כלליים', nStudents:'מספר נבחנים', classAvg:'ממוצע כיתתי', highest:'ציון גבוה', lowest:'ציון נמוך', median:'חציון', stdev:'סטיית תקן',
-    distTitle:'התפלגות התלמידים לפי טווחים', band:'טווח', from:'מ-', to:'עד (פחות מ-)', count:'מספר תלמידים', share:'אחוז %', chart:'תרשים',
-    byBloom:'הישגים לפי מיומנויות בלום', byTopic:'הישגים לפי נושא', bySection:'הישגים לפי פרק', qCount:'מספר שאלות', maxSum:'סה״כ ניקוד', avgPct:'ממוצע הישג %',
-    weakest:'3 השאלות החלשות', strongest:'3 השאלות החזקות', question:'שאלה',
-    bandsTitle:'טווחי התפלגות הציונים', bandsNote:'ניתן לשנות כאן את שמות הטווחים והסף התחתון שלהם (בסדר עולה המתחיל ב-0); כל החישובים והצבעים יתעדכנו אוטומטית.',
-    minCol:'סף תחתון', colorCol:'צבע',
-    errTitle:'ציון שגוי', errMsg:'הציון חייב להיות בין 0 לניקוד המרבי של השאלה.',
+    qAvgPct:'ממוצע שאלה (מ-100)', qAvgPts:'ממוצע ניקוד',
+    allClasses:'כל הכיתות', overallPct:'ממוצע כללי %', totalRow:'סה״כ', indicator:'מדד',
+    kpi:'מדדים כלליים', nStudents:'מספר נבחנים', classAvg:'ממוצע', highest:'ציון גבוה', lowest:'ציון נמוך', median:'חציון', stdev:'סטיית תקן',
+    distTitle:'התפלגות התלמידים לפי טווחים (מספר)', distPctTitle:'התפלגות התלמידים לפי טווחים (%)', band:'טווח', from:'מ-', to:'עד', share:'אחוז %', chart:'תרשים',
+    byBloom:'הישגים לפי מיומנויות בלום (%)', byTopic:'הישגים לפי נושא (%)', bySection:'הישגים לפי פרק (%)', qCount:'מספר שאלות', maxSum:'סה״כ ניקוד',
+    weakest:'3 השאלות החלשות (כל הכיתות)', strongest:'3 השאלות החזקות (כל הכיתות)', question:'שאלה', avgPct:'ממוצע הישג %',
+    bandsTitle:'טווחי התפלגות הציונים',
+    bandsNote:'ניתן לשנות כאן את שמות הטווחים והגבולות שלהם, כולל הגבול התחתון של הטווח הראשון והעליון של האחרון. כל החישובים והצבעים יתעדכנו. ציון מתחת לגבול התחתון נספר בטווח הראשון, ומעל לעליון – בטווח האחרון.',
+    colorCol:'צבע', errTitle:'ערך שגוי', errMsg:'הציון חייב להיות בין 0 לניקוד המרבי של השאלה.', bandErrMsg:'הגבולות חייבים להיות בסדר עולה בין 0 ל-100.',
     legend:'מקרא צבעים:',
     guide:[
       ['איך משתמשים בקובץ?',''],
-      ['1','עברו לגיליון «הזנת ציונים» ורשמו את שמות התלמידים בעמודה השנייה.'],
+      ['1','לכל כיתה גיליון הזנה משלה הנושא את שמה. רשמו את שמות התלמידים בעמודה השנייה.'],
       ['2','הזינו את ציון כל תלמיד בכל שאלה. לא ניתן להזין ציון הגבוה מהניקוד המרבי.'],
       ['3','אם תלמיד לא ענה על שאלה – רשמו 0. שורה של תלמיד חסר השאירו ריקה לגמרי.'],
-      ['4','הסכום, האחוז והרמה מחושבים אוטומטית והתאים נצבעים לפי המקרא.'],
-      ['5','גיליון «סיכום תוצאות» מציג התפלגות, הישגים לפי בלום, פרקים ונושאים.'],
-      ['6','לשינוי הטווחים השתמשו בגיליון «טווחים».'],
-      ['7','לאחר ההזנה שמרו את הקובץ והעלו אותו לפלטפורמה לקבלת ניתוח ותוכנית התערבות.'],
+      ['4','הסכום, האחוז והרמה מחושבים אוטומטית והתאים נצבעים בצבעי רמזור: אדום לנמוך, ירוק לגבוה.'],
+      ['5','גיליון «%ALL%» משווה בין הכיתות ומציג את התוצאות הכוללות.'],
+      ['6','גיליון «ניתוח המבחן» מציג את ממוצע כל שאלה בכל כיתה ובכולן.'],
+      ['7','לשינוי הטווחים השתמשו בגיליון «טווחים».'],
+      ['8','לאחר ההזנה שמרו את הקובץ והעלו אותו לפלטפורמה לקבלת ניתוח ותוכנית התערבות.'],
       ['הערה','התאים המחושבים מוגנים מעריכה בטעות (ניתן לבטל: סקירה ← בטל הגנת גיליון).']
     ]
   },
   en:{
     rtl:false,
-    shGuide:'Guide', shGrades:'Grades', shExam:'Exam Analysis', shSummary:'Results Summary', shBands:'Ranges',
-    title:'Class Screening – Grade Entry', teacher:'Teacher', grade:'Class', date:'Date', subject:'Subject',
+    shGuide:'Guide', shExam:'Exam Analysis', shSummary:'Results Summary', shAll:'All Classes Analysis', shBands:'Ranges',
+    title:'Class Screening – Grade Entry', teacher:'Teacher', grade:'Grade', date:'Date', subject:'Subject', classLbl:'Class',
     section:'Section', qNum:'Question #', bloom:'Bloom Skill', topic:'Topic', max:'Max Score',
     num:'#', student:'Student Name', total:'Total', pct:'Percent %', level:'Level',
-    qAvgPct:'Question Avg (of 100)', qAvgPts:'Avg Points', answered:'Students', helper:'helper',
-    studentAvg:'Class Avg %', totalRow:'Total',
-    kpi:'Key Indicators', nStudents:'Students Tested', classAvg:'Class Average', highest:'Highest', lowest:'Lowest', median:'Median', stdev:'Std. Deviation',
-    distTitle:'Students by Performance Range', band:'Range', from:'From', to:'To (below)', count:'Students', share:'Share %', chart:'Chart',
-    byBloom:'Achievement by Bloom Skill', byTopic:'Achievement by Topic', bySection:'Achievement by Section', qCount:'Questions', maxSum:'Total Points', avgPct:'Achievement %',
-    weakest:'3 Weakest Questions', strongest:'3 Strongest Questions', question:'Question',
-    bandsTitle:'Performance Ranges', bandsNote:'Edit range names and lower bounds here (ascending, starting at 0); all calculations and colors update automatically.',
-    minCol:'Lower Bound', colorCol:'Color',
-    errTitle:'Invalid score', errMsg:'Score must be between 0 and the question maximum.',
+    qAvgPct:'Question Avg (of 100)', qAvgPts:'Avg Points',
+    allClasses:'All classes', overallPct:'Overall %', totalRow:'Total', indicator:'Indicator',
+    kpi:'Key Indicators', nStudents:'Students Tested', classAvg:'Average', highest:'Highest', lowest:'Lowest', median:'Median', stdev:'Std. Deviation',
+    distTitle:'Students by Range (count)', distPctTitle:'Students by Range (%)', band:'Range', from:'From', to:'To', share:'Share %', chart:'Chart',
+    byBloom:'Achievement by Bloom Skill (%)', byTopic:'Achievement by Topic (%)', bySection:'Achievement by Section (%)', qCount:'Questions', maxSum:'Total Points',
+    weakest:'3 Weakest Questions (all classes)', strongest:'3 Strongest Questions (all classes)', question:'Question', avgPct:'Achievement %',
+    bandsTitle:'Performance Ranges',
+    bandsNote:'Edit range names and bounds here, including the lowest bound of the first range and the top of the last one; everything updates automatically. Scores below the lowest bound count in the first range, scores above the top in the last range.',
+    colorCol:'Color', errTitle:'Invalid value', errMsg:'Score must be between 0 and the question maximum.', bandErrMsg:'Bounds must increase between 0 and 100.',
     legend:'Color key:',
     guide:[
       ['How to use this file',''],
-      ['1','Go to the "Grades" sheet and type student names in the second column.'],
+      ['1','Each class has its own entry sheet named after it. Type student names in the second column.'],
       ['2','Enter each student\'s score per question. Scores above the question maximum are rejected.'],
       ['3','If a student skipped a question, enter 0. Leave an absent student\'s row completely empty.'],
-      ['4','Total, percent and level are calculated automatically and cells are color-coded.'],
-      ['5','The "Results Summary" sheet shows the distribution and achievement by Bloom skill, section and topic.'],
-      ['6','To change the ranges, use the "Ranges" sheet.'],
-      ['7','Save the file and upload it back to the platform for the analysis and intervention plan.'],
+      ['4','Total, percent and level are calculated automatically; cells use traffic-light colors: red for lowest, green for highest.'],
+      ['5','The "%ALL%" sheet compares the classes and shows the combined results.'],
+      ['6','The "Exam Analysis" sheet shows each question\'s average per class and overall.'],
+      ['7','To change the ranges, use the "Ranges" sheet.'],
+      ['8','Save the file and upload it back to the platform for the analysis and intervention plan.'],
       ['Note','Calculated cells are protected from accidental edits (Review → Unprotect Sheet).']
     ]
   }
 };
 
 /* ═══════════ EXCEL BUILDER (ExcelJS) ═══════════ */
-async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subjectName,nStudents}){
+async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subjectName,nStudents,classes}){
   const L=XL[lang]||XL.ar;
   const N=Math.max(5,Math.min(60,parseInt(nStudents)||35));
-  const Q=questions.length;
-  const nb=bands.length;
+  const Q=questions.length, nb=bands.length;
+  const multi=Array.isArray(classes)&&classes.length>1;
+  const SH_ALL=multi?L.shAll:L.shSummary;
+  const classNames=sheetSafeNames((classes&&classes.length?classes:[teacher.grade||L.classLbl]),[L.shGuide,L.shExam,SH_ALL,L.shBands,'_meta']);
+  const nC=classNames.length;
   const wb=new ExcelJS.Workbook();
   wb.creator='ومضات ذكية مع منى مصطفى';
   wb.created=new Date();
-  const FONT='Arial';
-  const NAVY='1E3A5F', NAVY2='2C5282', GREY='F1F5F9', ZEBRA='F8FAFC', BORDER='CBD5E1';
+  const FONT='Arial', NAVY='1E3A5F', NAVY2='2C5282', GREY='F1F5F9', ZEBRA='F8FAFC', BORDER='CBD5E1', DARK='111827';
   const col=(n)=>{let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}; // 0-based
-  const q=(name)=>`'${name.replace(/'/g,"''")}'`;
+  const q=(name)=>`'${String(name).replace(/'/g,"''")}'`;
   const thin={style:'thin',color:{argb:'FF'+BORDER}};
   const box={top:thin,left:thin,bottom:thin,right:thin};
   const fill=(hex)=>({type:'pattern',pattern:'solid',fgColor:{argb:'FF'+hex}});
   const center={horizontal:'center',vertical:'middle',wrapText:true};
+  const side=L.rtl?'right':'left';
+  const startAlign={vertical:'middle',horizontal:side,indent:1,wrapText:true};
   const style=(c,{bold=false,size=11,color='1F2937',bg=null,align=center,border=true,numFmt=null}={})=>{
     c.font={name:FONT,size,bold,color:{argb:'FF'+color}};
     if(bg) c.fill=fill(bg);
@@ -706,278 +742,341 @@ async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subj
     'Remember':'E5E7EB','Understand':'DBEAFE','Apply':'D1FAE5','Analyze':'FEF3C7','Analyse':'FEF3C7','Evaluate':'FEE2E2','Create':'EDE9FE',
     'זיכרון':'E5E7EB','הבנה':'DBEAFE','יישום':'D1FAE5','ניתוח':'FEF3C7','הערכה':'FEE2E2','יצירה':'EDE9FE'};
   const bloomFill=(s)=>{s=String(s||'');for(const k in BLOOM_FILL){if(s.includes(k))return BLOOM_FILL[k];}return 'F3F4F6';};
+  const info=[subjectName,teacher.grade&&`${L.grade}: ${teacher.grade}`,teacher.name&&`${L.teacher}: ${teacher.name}`,teacher.date&&`${L.date}: ${teacher.date}`].filter(Boolean).join('   •   ');
 
+  /* sheet order: guide, one sheet per class, all-classes analysis, exam analysis, ranges */
   const wsGuide=wb.addWorksheet(L.shGuide,{views:view(),properties:{tabColor:{argb:'FF64748B'}}});
-  const wsG=wb.addWorksheet(L.shGrades,{views:view({state:'frozen',xSplit:2,ySplit:8}),properties:{tabColor:{argb:'FF'+NAVY}}});
+  const classSheets=classNames.map(n=>wb.addWorksheet(n,{views:view({state:'frozen',xSplit:2,ySplit:8}),properties:{tabColor:{argb:'FF'+NAVY}}}));
+  const wsS=wb.addWorksheet(SH_ALL,{views:view(),properties:{tabColor:{argb:'FF16A34A'}}});
   const wsE=wb.addWorksheet(L.shExam,{views:view({state:'frozen',ySplit:3}),properties:{tabColor:{argb:'FF7C3AED'}}});
-  const wsS=wb.addWorksheet(L.shSummary,{views:view(),properties:{tabColor:{argb:'FF16A34A'}}});
   const wsB=wb.addWorksheet(L.shBands,{views:view(),properties:{tabColor:{argb:'FFEA580C'}}});
   const wsM=wb.addWorksheet('_meta',{state:'veryHidden'});
 
-  /* ── Bands sheet (single source of truth for ranges) ── */
-  wsB.columns=[{width:6},{width:26},{width:16},{width:16},{width:14}];
+  /* ── Ranges sheet (single source of truth) ── */
+  wsB.columns=[{width:6},{width:26},{width:14},{width:14},{width:12}];
   wsB.mergeCells('A1:E1');
   wsB.getCell('A1').value=L.bandsTitle; style(wsB.getCell('A1'),{bold:true,size:16,color:'FFFFFF',bg:NAVY,border:false});
   wsB.getRow(1).height=34;
   wsB.mergeCells('A2:E2');
-  wsB.getCell('A2').value=L.bandsNote; style(wsB.getCell('A2'),{size:10,color:'475569',border:false,align:{...center,horizontal:L.rtl?'right':'left'}});
-  wsB.getRow(2).height=36;
-  [L.num,L.band,L.minCol,L.to,L.colorCol].forEach((h,i)=>headerCell(wsB.getCell(4,i+1),h,NAVY2));
-  const B0=5; // first band row
+  wsB.getCell('A2').value=L.bandsNote; style(wsB.getCell('A2'),{size:10,color:'475569',border:false,align:{...center,horizontal:side}});
+  wsB.getRow(2).height=56;
+  [L.num,L.band,L.from,L.to,L.colorCol].forEach((h,i)=>headerCell(wsB.getCell(4,i+1),h,NAVY2));
+  const B0=5, BL=B0+nb-1;
+  const bandDV=(lo,hi)=>({type:'decimal',operator:'between',allowBlank:false,showErrorMessage:true,formulae:[lo,hi],errorTitle:L.errTitle,error:L.bandErrMsg});
   bands.forEach((b,i)=>{
     const r=B0+i;
     wsB.getCell(r,1).value=i+1; style(wsB.getCell(r,1),{bg:GREY,bold:true});
     const cn=wsB.getCell(r,2); cn.value=b.name; style(cn,{bold:true}); cn.protection={locked:false};
-    const cm=wsB.getCell(r,3); cm.value=Number(b.min); style(cm,{bold:true,bg:'FFFBEB'}); cm.protection={locked:i>0?false:true};
-    const ct=wsB.getCell(r,4); ct.value= i<nb-1 ? {formula:`C${r+1}`} : 100; style(ct,{color:'475569'});
+    const cm=wsB.getCell(r,3); cm.value=Number(b.min); style(cm,{bold:true,bg:'FFFBEB'}); cm.protection={locked:false};
+    const lo=i===0?0:`C${r-1}+0.01`, hi=i<nb-1?`C${r+1}-0.01`:`D${r}-0.01`;
+    cm.dataValidation=bandDV(lo,hi);
+    const ct=wsB.getCell(r,4);
+    if(i<nb-1){ct.value={formula:`C${r+1}`};style(ct,{color:'475569'});}
+    else{ct.value=bandTop(bands);style(ct,{bold:true,bg:'FFFBEB'});ct.protection={locked:false};ct.dataValidation=bandDV(`C${r}+0.01`,100);}
     const cc=wsB.getCell(r,5); cc.value=''; style(cc,{bg:bandLight(bands,i)});
     wsB.getRow(r).height=24;
-    if(i>0){
-      cm.dataValidation={type:'decimal',operator:'between',allowBlank:false,showErrorMessage:true,
-        formulae:[`C${r-1}+0.01`,99.99],errorTitle:L.errTitle,error:L.bandsNote};
-    }
   });
-  const BL=B0+nb-1;
-  const BMIN=(i)=>`${q(L.shBands)}!$C$${B0+i}`;
-  const BNAME=(i)=>`${q(L.shBands)}!$B$${B0+i}`;
-  const MINS=`${q(L.shBands)}!$C$${B0}:$C$${BL}`;
-  const NAMES=`${q(L.shBands)}!$B$${B0}:$B$${BL}`;
-  // Defined names so conditional formatting can refer to the bands from other sheets
-  for(let i=0;i<nb;i++) wb.definedNames.add(`${q(L.shBands)}!$C$${B0+i}`,`BAND_MIN_${i+1}`);
+  const BS=q(L.shBands);
+  const BMIN=(i)=>`${BS}!$C$${B0+i}`;
+  const BTO=(i)=>`${BS}!$D$${B0+i}`;
+  const BNAME=(i)=>`${BS}!$B$${B0+i}`;
+  const MINS=`${BS}!$C$${B0}:$C$${BL}`, NAMES=`${BS}!$B$${B0}:$B$${BL}`;
+  for(let i=1;i<nb;i++) wb.definedNames.add(`${BS}!$C$${B0+i}`,`BAND_MIN_${i+1}`);
+  const levelOf=(ref)=>`IF(${ref}="","",LOOKUP(MAX(${ref},${BMIN(0)}),${MINS},${NAMES}))`;
+  const legendText=(i)=>`${BNAME(i)}&" ("&${BMIN(i)}&"–"&${BTO(i)}&")"`;
   await wsB.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true});
 
-  /* ── Grades sheet ── */
-  const FQ=2;                    // first question column (0-based) → C
-  const LQ=FQ+Q-1;
-  const CT=LQ+1, CP=LQ+2, CL=LQ+3; // total, percent, level
+  /* traffic-light conditional formatting: ratioExpr returns -1 for empty cells */
+  const cfRules=(ratioExpr)=>bands.map((b,i)=>{
+    const cond= i===0 ? `AND(${ratioExpr}>=0,${ratioExpr}<BAND_MIN_2)`
+              : i<nb-1 ? `AND(${ratioExpr}>=BAND_MIN_${i+1},${ratioExpr}<BAND_MIN_${i+2})`
+              : `${ratioExpr}>=BAND_MIN_${nb}`;
+    return {type:'expression',priority:i+1,formulae:[cond],
+      style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FF'+bandLight(bands,i)}},font:{color:{argb:'FF'+DARK}}}};
+  });
+  const numOr=(ref)=>`IF(ISNUMBER(${ref}),${ref},-1)`;
+
+  /* ── Class sheets ── */
+  const FQ=2, LQ=FQ+Q-1, CT=LQ+1, CP=LQ+2, CL=LQ+3;
   const R_SEC=4,R_QN=5,R_BL=6,R_TP=7,R_MX=8, R1=9, RN=R1+N-1;
-  const R_AVGP=RN+1, R_AVGPCT=RN+2, R_HELP=RN+3;
+  const R_AVGP=RN+1, R_AVGPCT=RN+2, R_SUM=RN+3;
   const qc=(j)=>col(FQ+j);
   const lastCol=col(CL);
-  wsG.getColumn(1).width=5; wsG.getColumn(2).width=24;
-  for(let j=0;j<Q;j++) wsG.getColumn(FQ+1+j).width=Q>20?8:10;
-  wsG.getColumn(CT+1).width=11; wsG.getColumn(CP+1).width=11; wsG.getColumn(CL+1).width=16;
+  const TOT=`$${col(CT)}$${R_MX}`, PCTL=`$${col(CP)}$${R1}:$${col(CP)}$${RN}`;
+  const NLOC=`$${col(CT)}$${R_SUM}`;
+  const CLS=classNames.map(n=>{const s=q(n);return{
+    name:n, PCT:`${s}!${PCTL}`, N:`${s}!${NLOC}`,
+    ROW:(r)=>`${s}!$${qc(0)}$${r}:$${qc(Q-1)}$${r}`,
+    CELL:(j,r)=>`${s}!$${qc(j)}$${r}`
+  };});
 
-  wsG.mergeCells(`A1:${lastCol}1`);
-  const info=[subjectName,teacher.grade&&`${L.grade}: ${teacher.grade}`,teacher.name&&`${L.teacher}: ${teacher.name}`,teacher.date&&`${L.date}: ${teacher.date}`].filter(Boolean).join('   •   ');
-  wsG.getCell('A1').value=`${L.title}${info?'   —   '+info:''}`;
-  style(wsG.getCell('A1'),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false});
-  wsG.getRow(1).height=34;
-  // legend row
-  wsG.getCell('B2').value=L.legend; style(wsG.getCell('B2'),{bold:true,border:false,color:'475569'});
-  bands.forEach((b,i)=>{
-    const c=wsG.getCell(2,3+i*2);
-    wsG.mergeCells(2,3+i*2,2,4+i*2);
-    c.value={formula:`${BNAME(i)}&" ("&${BMIN(i)}&"–"&${i<nb-1?BMIN(i+1):'100'}&")"`};
-    style(c,{bold:true,size:9,bg:bandLight(bands,i),color:'1F2937'});
-  });
-  wsG.getRow(2).height=22; wsG.getRow(3).height=6;
-
-  const rowLabels=[[R_SEC,L.section],[R_QN,L.qNum],[R_BL,L.bloom],[R_TP,L.topic],[R_MX,L.max]];
-  rowLabels.forEach(([r,lbl])=>{
-    wsG.mergeCells(r,1,r,2);
-    const c=wsG.getCell(r,1); c.value=lbl; style(c,{bold:true,color:'FFFFFF',bg:NAVY2});
-  });
-  questions.forEach((qq,j)=>{
-    const C=FQ+1+j;
-    const s=wsG.getCell(R_SEC,C); s.value=qq.section||''; style(s,{bold:true,size:9,bg:'E2E8F0'});
-    const n=wsG.getCell(R_QN,C); n.value=isNaN(Number(qq.qNum))||qq.qNum===''?String(qq.qNum||j+1):Number(qq.qNum); style(n,{bold:true,color:'FFFFFF',bg:NAVY});
-    const b=wsG.getCell(R_BL,C); b.value=qq.bloomSkill||''; style(b,{size:9,bg:bloomFill(qq.bloomSkill)});
-    const t=wsG.getCell(R_TP,C); t.value=qq.contentSkill||''; style(t,{size:8,color:'475569'});
-    const m=wsG.getCell(R_MX,C); m.value=Number(qq.max)||0; style(m,{bold:true,color:'B91C1C',bg:'FEF2F2'});
-  });
-  // sections are NOT merged: every question keeps its section text so the summary formulas can group by it;
-  // instead, a thicker border marks where a new section starts
-  for(let j=1;j<Q;j++){
-    if(String(questions[j].section||'')!==String(questions[j-1].section||'')){
-      const side=L.rtl?'right':'left';
-      for(let rr=R_SEC;rr<=R_MX;rr++){const c=wsG.getCell(rr,FQ+1+j);c.border={...c.border,[side]:{style:'medium',color:{argb:'FF'+NAVY}}};}
+  classSheets.forEach((wsG,ci)=>{
+    wsG.getColumn(1).width=5; wsG.getColumn(2).width=24;
+    for(let j=0;j<Q;j++) wsG.getColumn(FQ+1+j).width=Q>20?8:10;
+    wsG.getColumn(CT+1).width=11; wsG.getColumn(CP+1).width=11; wsG.getColumn(CL+1).width=16;
+    wsG.mergeCells(`A1:${lastCol}1`);
+    const head=[`${L.classLbl}: ${classNames[ci]}`,subjectName,teacher.name&&`${L.teacher}: ${teacher.name}`,teacher.date&&`${L.date}: ${teacher.date}`].filter(Boolean).join('   •   ');
+    wsG.getCell('A1').value=`${L.title}   —   ${head}`;
+    style(wsG.getCell('A1'),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false});
+    wsG.getRow(1).height=34;
+    wsG.getCell('B2').value=L.legend; style(wsG.getCell('B2'),{bold:true,border:false,color:'475569'});
+    bands.forEach((b,i)=>{
+      const c=wsG.getCell(2,3+i*2);
+      wsG.mergeCells(2,3+i*2,2,4+i*2);
+      c.value={formula:legendText(i)};
+      style(c,{bold:true,size:9,bg:bandLight(bands,i),color:DARK});
+    });
+    wsG.getRow(2).height=22; wsG.getRow(3).height=6;
+    [[R_SEC,L.section],[R_QN,L.qNum],[R_BL,L.bloom],[R_TP,L.topic],[R_MX,L.max]].forEach(([r,lbl])=>{
+      wsG.mergeCells(r,1,r,2);
+      const c=wsG.getCell(r,1); c.value=lbl; style(c,{bold:true,color:'FFFFFF',bg:NAVY2});
+    });
+    questions.forEach((qq,j)=>{
+      const C=FQ+1+j;
+      const s=wsG.getCell(R_SEC,C); s.value=qq.section||''; style(s,{bold:true,size:9,bg:'E2E8F0'});
+      const n=wsG.getCell(R_QN,C); n.value=isNaN(Number(qq.qNum))||qq.qNum===''?String(qq.qNum||j+1):Number(qq.qNum); style(n,{bold:true,color:'FFFFFF',bg:NAVY});
+      const bl=wsG.getCell(R_BL,C); bl.value=qq.bloomSkill||''; style(bl,{size:9,bg:bloomFill(qq.bloomSkill)});
+      const t=wsG.getCell(R_TP,C); t.value=qq.contentSkill||''; style(t,{size:8,color:'475569'});
+      const m=wsG.getCell(R_MX,C); m.value=Number(qq.max)||0; style(m,{bold:true,color:'B91C1C',bg:'FEF2F2'});
+    });
+    for(let j=1;j<Q;j++){
+      if(String(questions[j].section||'')!==String(questions[j-1].section||'')){
+        for(let rr=R_SEC;rr<=R_MX;rr++){const c=wsG.getCell(rr,FQ+1+j);c.border={...c.border,[side]:{style:'medium',color:{argb:'FF'+NAVY}}};}
+      }
     }
-  }
-  [[CT,L.total],[CP,L.pct],[CL,L.level]].forEach(([c0,lbl])=>{
-    wsG.mergeCells(R_SEC,c0+1,R_TP,c0+1);
-    headerCell(wsG.getCell(R_SEC,c0+1),lbl);
-  });
-  const totMax=wsG.getCell(R_MX,CT+1); totMax.value={formula:`SUM(${qc(0)}${R_MX}:${qc(Q-1)}${R_MX})`}; style(totMax,{bold:true,color:'B91C1C',bg:'FEF2F2'});
-  style(wsG.getCell(R_MX,CP+1),{bg:'FEF2F2'}); wsG.getCell(R_MX,CP+1).value=100;
-  style(wsG.getCell(R_MX,CL+1),{bg:'FEF2F2'});
-  wsG.getRow(R_TP).height=Q>15?48:36; wsG.getRow(R_BL).height=22;
+    [[CT,L.total],[CP,L.pct],[CL,L.level]].forEach(([c0,lbl])=>{
+      wsG.mergeCells(R_SEC,c0+1,R_TP,c0+1);
+      headerCell(wsG.getCell(R_SEC,c0+1),lbl);
+    });
+    const totMax=wsG.getCell(R_MX,CT+1); totMax.value={formula:`SUM(${qc(0)}${R_MX}:${qc(Q-1)}${R_MX})`}; style(totMax,{bold:true,color:'B91C1C',bg:'FEF2F2'});
+    wsG.getCell(R_MX,CP+1).value=100; style(wsG.getCell(R_MX,CP+1),{bg:'FEF2F2'});
+    style(wsG.getCell(R_MX,CL+1),{bg:'FEF2F2'});
+    wsG.getRow(R_TP).height=Q>15?48:36; wsG.getRow(R_BL).height=22;
 
-  const TOT=`$${col(CT)}$${R_MX}`;
-  for(let r=R1;r<=RN;r++){
-    const zebra=(r-R1)%2?ZEBRA:'FFFFFF';
-    const cn=wsG.getCell(r,1); cn.value=r-R1+1; style(cn,{bg:GREY,color:'64748B',size:10});
-    const nm=wsG.getCell(r,2); style(nm,{bg:zebra,align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1}}); nm.protection={locked:false};
+    for(let r=R1;r<=RN;r++){
+      const zebra=(r-R1)%2?ZEBRA:'FFFFFF';
+      const cn=wsG.getCell(r,1); cn.value=r-R1+1; style(cn,{bg:GREY,color:'64748B',size:10});
+      const nm=wsG.getCell(r,2); style(nm,{bg:zebra,align:startAlign}); nm.protection={locked:false};
+      for(let j=0;j<Q;j++){
+        const c=wsG.getCell(r,FQ+1+j);
+        style(c,{bg:zebra,numFmt:'0.##'});
+        c.protection={locked:false};
+        c.dataValidation={type:'decimal',operator:'between',allowBlank:true,showErrorMessage:true,
+          errorStyle:'stop',errorTitle:L.errTitle,error:L.errMsg,formulae:[0,`${qc(j)}$${R_MX}`]};
+      }
+      const rng=`${qc(0)}${r}:${qc(Q-1)}${r}`;
+      const ct=wsG.getCell(r,CT+1); ct.value={formula:`IF(COUNT(${rng})=0,"",SUM(${rng}))`}; style(ct,{bold:true,bg:'F1F5F9',numFmt:'0.##'});
+      const cp=wsG.getCell(r,CP+1); cp.value={formula:`IF(${col(CT)}${r}="","",ROUND(${col(CT)}${r}/${TOT}*100,1))`}; style(cp,{bold:true,numFmt:'0.0'});
+      const cl=wsG.getCell(r,CL+1); cl.value={formula:levelOf(`${col(CP)}${r}`)}; style(cl,{bold:true,size:10});
+      wsG.getRow(r).height=20;
+    }
+    // per-question rows
+    [[R_AVGP,L.qAvgPts],[R_AVGPCT,L.qAvgPct]].forEach(([r,lbl])=>{wsG.mergeCells(r,1,r,2); headerCell(wsG.getCell(r,1),lbl,NAVY2);});
+    const sumN=wsG.getCell(R_SUM,CT+1); sumN.value={formula:`COUNT(${PCTL})`}; sumN.font={color:{argb:'FFFFFFFF'},size:8};
     for(let j=0;j<Q;j++){
-      const c=wsG.getCell(r,FQ+1+j);
-      style(c,{bg:zebra,numFmt:'0.##'});
-      c.protection={locked:false};
-      c.dataValidation={type:'decimal',operator:'between',allowBlank:true,showErrorMessage:true,
-        errorStyle:'stop',errorTitle:L.errTitle,error:L.errMsg,formulae:[0,`${qc(j)}$${R_MX}`]};
+      const C=qc(j);
+      const sm=wsG.getCell(R_SUM,FQ+1+j); sm.value={formula:`SUM(${C}${R1}:${C}${RN})`}; sm.font={color:{argb:'FFFFFFFF'},size:8};
+      const a=wsG.getCell(R_AVGP,FQ+1+j);
+      a.value={formula:`IF(${NLOC}=0,"",ROUND(${C}${R_SUM}/${NLOC},2))`}; style(a,{bold:true,bg:GREY,numFmt:'0.##'});
+      const p=wsG.getCell(R_AVGPCT,FQ+1+j);
+      p.value={formula:`IF(OR(${NLOC}=0,${C}$${R_MX}=0),"",ROUND(${C}${R_SUM}/(${C}$${R_MX}*${NLOC})*100,1))`}; style(p,{bold:true,numFmt:'0.0'});
     }
-    const rng=`${qc(0)}${r}:${qc(Q-1)}${r}`;
-    const ct=wsG.getCell(r,CT+1); ct.value={formula:`IF(COUNT(${rng})=0,"",SUM(${rng}))`}; style(ct,{bold:true,bg:'F1F5F9',numFmt:'0.##'});
-    const cp=wsG.getCell(r,CP+1); cp.value={formula:`IF(${col(CT)}${r}="","",ROUND(${col(CT)}${r}/${TOT}*100,1))`}; style(cp,{bold:true,numFmt:'0.0'});
-    const cl=wsG.getCell(r,CL+1); cl.value={formula:`IF(${col(CP)}${r}="","",LOOKUP(${col(CP)}${r},${MINS},${NAMES}))`}; style(cl,{bold:true,size:10});
-    wsG.getRow(r).height=20;
-  }
-  const PCT=`${q(L.shGrades)}!$${col(CP)}$${R1}:$${col(CP)}$${RN}`;
-  const PCTL=`$${col(CP)}$${R1}:$${col(CP)}$${RN}`;
-  const NST=`COUNT(${PCTL})`;
-  // per-question rows
-  [[R_AVGP,L.qAvgPts],[R_AVGPCT,L.qAvgPct]].forEach(([r,lbl])=>{
-    wsG.mergeCells(r,1,r,2); headerCell(wsG.getCell(r,1),lbl,NAVY2);
+    const avgT=wsG.getCell(R_AVGP,CT+1); avgT.value={formula:`IF(${NLOC}=0,"",ROUND(AVERAGE(${col(CT)}${R1}:${col(CT)}${RN}),2))`}; style(avgT,{bold:true,bg:GREY,numFmt:'0.##'});
+    const avgP=wsG.getCell(R_AVGPCT,CP+1); avgP.value={formula:`IF(${NLOC}=0,"",ROUND(AVERAGE(${PCTL}),1))`}; style(avgP,{bold:true,numFmt:'0.0'});
+    const avgL=wsG.getCell(R_AVGPCT,CL+1); avgL.value={formula:levelOf(`${col(CP)}${R_AVGPCT}`)}; style(avgL,{bold:true,size:10});
+    wsG.getRow(R_SUM).hidden=true;
+
+    const a1=`${qc(0)}${R1}`;
+    wsG.addConditionalFormatting({ref:`${qc(0)}${R1}:${qc(Q-1)}${RN}`,rules:cfRules(`IF(ISNUMBER(${a1}),${a1}/${qc(0)}$${R_MX}*100,-1)`)});
+    wsG.addConditionalFormatting({ref:`${qc(0)}${R_AVGPCT}:${qc(Q-1)}${R_AVGPCT}`,rules:cfRules(numOr(`${qc(0)}${R_AVGPCT}`))});
+    wsG.addConditionalFormatting({ref:`${col(CP)}${R1}:${col(CL)}${R_AVGPCT}`,rules:cfRules(numOr(`$${col(CP)}${R1}`))});
+    wsG.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9,
+      margins:{left:0.3,right:0.3,top:0.4,bottom:0.4,header:0.2,footer:0.2},printTitlesRow:`${R_SEC}:${R_MX}`};
   });
-  for(let j=0;j<Q;j++){
-    const C=qc(j);
-    const a=wsG.getCell(R_AVGP,FQ+1+j);
-    a.value={formula:`IF(${NST}=0,"",ROUND(SUM(${C}${R1}:${C}${RN})/${NST},2))`}; style(a,{bold:true,bg:GREY,numFmt:'0.##'});
-    const p=wsG.getCell(R_AVGPCT,FQ+1+j);
-    p.value={formula:`IF(OR(${NST}=0,${C}$${R_MX}=0),"",ROUND(SUM(${C}${R1}:${C}${RN})/(${C}$${R_MX}*${NST})*100,1))`}; style(p,{bold:true,numFmt:'0.0'});
-    const h=wsG.getCell(R_HELP,FQ+1+j);
-    h.value={formula:`IF(${C}${R_AVGPCT}="","",${C}${R_AVGPCT}+COLUMN()/100000)`}; h.font={color:{argb:'FFFFFFFF'},size:8};
-  }
-  const avgT=wsG.getCell(R_AVGP,CT+1); avgT.value={formula:`IF(${NST}=0,"",ROUND(AVERAGE(${col(CT)}${R1}:${col(CT)}${RN}),2))`}; style(avgT,{bold:true,bg:GREY,numFmt:'0.##'});
-  const avgP=wsG.getCell(R_AVGPCT,CP+1); avgP.value={formula:`IF(${NST}=0,"",ROUND(AVERAGE(${PCTL}),1))`}; style(avgP,{bold:true,numFmt:'0.0'});
-  const avgL=wsG.getCell(R_AVGPCT,CL+1); avgL.value={formula:`IF(${col(CP)}${R_AVGPCT}="","",LOOKUP(${col(CP)}${R_AVGPCT},${MINS},${NAMES}))`}; style(avgL,{bold:true,size:10});
-  wsG.getRow(R_HELP).hidden=true;
+  for(const wsG of classSheets) await wsG.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true,formatRows:true});
 
-  // Conditional formatting – traffic light by percentage of max
-  const cfRules=(ratioExpr)=>bands.map((b,i)=>{
-    const lo=`BAND_MIN_${i+1}`;
-    const cond= i<nb-1 ? `AND(${ratioExpr}>=${lo},${ratioExpr}<BAND_MIN_${i+2})` : `${ratioExpr}>=${lo}`;
-    return {type:'expression',priority:i+1,formulae:[cond],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FF'+bandLight(bands,i)}},font:{color:{argb:'FF'+bandColor(bands,i).slice(1)}}}};
-  });
-  const a1=`${qc(0)}${R1}`;
-  wsG.addConditionalFormatting({ref:`${qc(0)}${R1}:${qc(Q-1)}${RN}`,
-    rules:cfRules(`IF(ISNUMBER(${a1}),${a1}/${qc(0)}$${R_MX}*100,-1)`)});
-  wsG.addConditionalFormatting({ref:`${qc(0)}${R_AVGPCT}:${qc(Q-1)}${R_AVGPCT}`,
-    rules:cfRules(`IF(ISNUMBER(${qc(0)}${R_AVGPCT}),${qc(0)}${R_AVGPCT},-1)`)});
-  wsG.addConditionalFormatting({ref:`${col(CP)}${R1}:${col(CL)}${R_AVGPCT}`,
-    rules:cfRules(`IF(ISNUMBER($${col(CP)}${R1}),$${col(CP)}${R1},-1)`)});
+  /* shared formula pieces across classes */
+  const sumNs=CLS.map(c=>c.N).join(',');
+  const allPct=CLS.map(c=>c.PCT).join(',');
 
-  wsG.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9,
-    margins:{left:0.3,right:0.3,top:0.4,bottom:0.4,header:0.2,footer:0.2},printTitlesRow:`${R_SEC}:${R_MX}`};
-  await wsG.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true,formatRows:true});
-
-  /* ── Exam analysis sheet ── */
-  const exCols=[L.num,L.section,L.qNum,L.bloom,L.topic,L.max,L.studentAvg,L.level];
-  wsE.columns=[{width:5},{width:16},{width:11},{width:14},{width:38},{width:12},{width:14},{width:16}];
-  wsE.mergeCells('A1:H1'); wsE.getCell('A1').value=`${L.shExam}${subjectName?' — '+subjectName:''}`;
-  style(wsE.getCell('A1'),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false}); wsE.getRow(1).height=32;
-  exCols.forEach((h,i)=>headerCell(wsE.getCell(3,i+1),h,NAVY2)); wsE.getRow(3).height=24;
-  const gref=(c,r)=>`${q(L.shGrades)}!${c}$${r}`;
+  /* ── Exam analysis sheet: structure + per-class question averages ── */
+  const EX_FIXED=6;                    // #, section, q, bloom, topic, max
+  const exClassCol=(k)=>EX_FIXED+1+k;  // 1-based
+  const EX_ALL=multi?EX_FIXED+nC+1:EX_FIXED+1;
+  const EX_LVL=EX_ALL+1, EX_HELP=EX_ALL+2;
+  const exWidths=[5,16,11,14,36,11];
+  exWidths.forEach((w,i)=>wsE.getColumn(i+1).width=w);
+  if(multi) classNames.forEach((n,k)=>wsE.getColumn(exClassCol(k)).width=12);
+  wsE.getColumn(EX_ALL).width=14; wsE.getColumn(EX_LVL).width=16; wsE.getColumn(EX_HELP).width=4; wsE.getColumn(EX_HELP).hidden=true;
+  wsE.mergeCells(1,1,1,EX_LVL); wsE.getCell(1,1).value=`${L.shExam}${info?' — '+info:''}`;
+  style(wsE.getCell(1,1),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false}); wsE.getRow(1).height=32;
+  [L.num,L.section,L.qNum,L.bloom,L.topic,L.max].forEach((h,i)=>headerCell(wsE.getCell(3,i+1),h,NAVY2));
+  if(multi) classNames.forEach((n,k)=>headerCell(wsE.getCell(3,exClassCol(k)),n,'0F766E'));
+  headerCell(wsE.getCell(3,EX_ALL),multi?L.overallPct:L.avgPct,NAVY); headerCell(wsE.getCell(3,EX_LVL),L.level,NAVY);
+  wsE.getRow(3).height=30;
+  const E0=4;
   questions.forEach((qq,j)=>{
-    const r=4+j, zebra=j%2?ZEBRA:'FFFFFF', C=qc(j);
-    const vals=[j+1,{formula:gref(C,R_SEC)},{formula:gref(C,R_QN)},{formula:gref(C,R_BL)},{formula:gref(C,R_TP)},{formula:gref(C,R_MX)},
-      {formula:gref(C,R_AVGPCT)},{formula:`IF(G${r}="","",LOOKUP(G${r},${MINS},${NAMES}))`}];
+    const r=E0+j, zebra=j%2?ZEBRA:'FFFFFF';
+    const vals=[j+1,qq.section||'',isNaN(Number(qq.qNum))||qq.qNum===''?String(qq.qNum||j+1):Number(qq.qNum),qq.bloomSkill||'',qq.contentSkill||'',Number(qq.max)||0];
     vals.forEach((v,i)=>{const c=wsE.getCell(r,i+1);c.value=v;
-      style(c,{bg:i===3?bloomFill(qq.bloomSkill):zebra,bold:i===2||i>=5,numFmt:i===6?'0.0':null,
-        align:i===4?{vertical:'middle',horizontal:L.rtl?'right':'left',wrapText:true,indent:1}:center});});
+      style(c,{bg:i===3?bloomFill(qq.bloomSkill):zebra,bold:i===2||i===5,align:i===4?startAlign:center});});
+    if(multi) CLS.forEach((c,k)=>{const cell=wsE.getCell(r,exClassCol(k));cell.value={formula:c.CELL(j,R_AVGPCT)};style(cell,{bold:true,numFmt:'0.0'});});
+    const sums=CLS.map(c=>c.CELL(j,R_SUM)).join(',');
+    const all=wsE.getCell(r,EX_ALL);
+    all.value={formula:`IF(OR(SUM(${sumNs})=0,$F${r}=0),"",ROUND(SUM(${sums})/($F${r}*SUM(${sumNs}))*100,1))`};
+    style(all,{bold:true,numFmt:'0.0',size:12});
+    const lv=wsE.getCell(r,EX_LVL); lv.value={formula:levelOf(`${col(EX_ALL-1)}${r}`)}; style(lv,{bold:true,size:10});
+    const hp=wsE.getCell(r,EX_HELP); hp.value={formula:`IF(${col(EX_ALL-1)}${r}="","",${col(EX_ALL-1)}${r}+ROW()/100000)`}; hp.font={size:8,color:{argb:'FFFFFFFF'}};
     wsE.getRow(r).height=22;
   });
-  const ER=4+Q;
+  const ER=E0+Q;
   wsE.mergeCells(ER,1,ER,5); headerCell(wsE.getCell(ER,1),L.totalRow);
-  const es=wsE.getCell(ER,6); es.value={formula:`SUM(F4:F${ER-1})`}; style(es,{bold:true,color:'FFFFFF',bg:NAVY});
-  const ea=wsE.getCell(ER,7); ea.value={formula:gref(col(CP),R_AVGPCT)}; style(ea,{bold:true,color:'FFFFFF',bg:NAVY,numFmt:'0.0'});
-  style(wsE.getCell(ER,8),{bg:NAVY});
-  wsE.addConditionalFormatting({ref:`G4:H${ER-1}`,rules:cfRules(`IF(ISNUMBER($G4),$G4,-1)`)});
+  const es=wsE.getCell(ER,6); es.value={formula:`SUM(F${E0}:F${ER-1})`}; style(es,{bold:true,color:'FFFFFF',bg:NAVY});
+  if(multi) CLS.forEach((c,k)=>{const cell=wsE.getCell(ER,exClassCol(k));cell.value={formula:`IFERROR(ROUND(AVERAGE(${c.PCT}),1),"")`};style(cell,{bold:true,numFmt:'0.0'});});
+  const ea=wsE.getCell(ER,EX_ALL); ea.value={formula:`IFERROR(ROUND(AVERAGE(${allPct}),1),"")`}; style(ea,{bold:true,numFmt:'0.0',size:12});
+  const el=wsE.getCell(ER,EX_LVL); el.value={formula:levelOf(`${col(EX_ALL-1)}${ER}`)}; style(el,{bold:true,size:10});
+  wsE.addConditionalFormatting({ref:`${col(EX_FIXED)}${E0}:${col(EX_LVL-1)}${ER}`,rules:cfRules(numOr(`${col(EX_FIXED)}${E0}`))});
+  wsE.pageSetup={orientation:multi&&nC>3?'landscape':'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
   await wsE.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true});
+  const EXS=q(L.shExam);
+  const HELP=`${EXS}!$${col(EX_HELP-1)}$${E0}:$${col(EX_HELP-1)}$${ER-1}`;
+  const QNUMS=`${EXS}!$C$${E0}:$C$${ER-1}`, TOPICS=`${EXS}!$E$${E0}:$E$${ER-1}`;
 
-  /* ── Summary sheet ── */
-  wsS.columns=[{width:30},{width:14},{width:14},{width:14},{width:14},{width:34}];
-  wsS.mergeCells('A1:F1'); wsS.getCell('A1').value=`${L.shSummary}${info?' — '+info:''}`;
-  style(wsS.getCell('A1'),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false}); wsS.getRow(1).height=34;
+  /* ── All-classes analysis (or results summary for one class) ── */
+  const SC=multi?nC:0;                 // class columns
+  const cCol=(k)=>2+k;                 // 1-based: B, C, ...
+  const ALLC=2+SC, BARC=ALLC+1;
+  wsS.getColumn(1).width=30;
+  for(let k=0;k<SC;k++) wsS.getColumn(cCol(k)).width=12;
+  wsS.getColumn(ALLC).width=14; wsS.getColumn(BARC).width=28;
+  wsS.mergeCells(1,1,1,BARC); wsS.getCell(1,1).value=`${SH_ALL}${info?' — '+info:''}`;
+  style(wsS.getCell(1,1),{bold:true,size:15,color:'FFFFFF',bg:NAVY,border:false}); wsS.getRow(1).height=34;
   let r=3;
-  const sectionTitle=(txt,bg='0F766E')=>{wsS.mergeCells(r,1,r,6);const c=wsS.getCell(r,1);c.value=txt;
-    style(c,{bold:true,size:13,color:'FFFFFF',bg,align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1}});wsS.getRow(r).height=26;r++;};
+  const sectionTitle=(txt,bg='0F766E')=>{wsS.mergeCells(r,1,r,BARC);const c=wsS.getCell(r,1);c.value=txt;
+    style(c,{bold:true,size:13,color:'FFFFFF',bg,align:{vertical:'middle',horizontal:side,indent:1}});wsS.getRow(r).height=26;r++;};
+  const headRow=(first,extra=[])=>{
+    headerCell(wsS.getCell(r,1),first,NAVY2);
+    for(let k=0;k<SC;k++) headerCell(wsS.getCell(r,cCol(k)),classNames[k],'0F766E');
+    headerCell(wsS.getCell(r,ALLC),multi?L.allClasses:L.avgPct,NAVY);
+    extra.forEach(([c,t])=>headerCell(wsS.getCell(r,c),t,NAVY2));
+    wsS.getRow(r).height=30; r++;
+  };
+  const labelCell=(row,txt,bg=GREY)=>{const c=wsS.getCell(row,1);c.value=txt;style(c,{bold:true,bg,align:startAlign});};
+  const barCell=(row,ref,color='2563EB')=>{const c=wsS.getCell(row,BARC);c.value={formula:`IF(${ref}="","",REPT("█",ROUND(${ref}/4,0)))`};
+    style(c,{size:10,color,align:{vertical:'middle',horizontal:side}});};
+
   // KPIs
   sectionTitle(L.kpi);
-  const kpis=[[L.nStudents,`COUNT(${PCT})`,'0'],[L.classAvg,`IFERROR(ROUND(AVERAGE(${PCT}),1),"")`,'0.0'],
-    [L.median,`IFERROR(ROUND(MEDIAN(${PCT}),1),"")`,'0.0'],[L.highest,`IFERROR(IF(COUNT(${PCT})=0,"",MAX(${PCT})),"")`,'0.0'],
-    [L.lowest,`IFERROR(IF(COUNT(${PCT})=0,"",MIN(${PCT})),"")`,'0.0'],[L.stdev,`IFERROR(ROUND(STDEV(${PCT}),1),"")`,'0.0']];
-  const kStart=r;
-  kpis.forEach(([lbl,f,fmt])=>{
-    const lc=wsS.getCell(r,1), vc=wsS.getCell(r,2);
-    lc.value=lbl; style(lc,{bold:true,bg:GREY,align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1}});
-    vc.value={formula:f}; style(vc,{bold:true,size:13,color:NAVY,numFmt:fmt});
+  headRow(L.indicator);
+  const NROW=r;
+  const kpis=[[L.nStudents,(p)=>`COUNT(${p})`,'0'],[L.classAvg,(p)=>`IFERROR(ROUND(AVERAGE(${p}),1),"")`,'0.0'],
+    [L.median,(p)=>`IFERROR(ROUND(MEDIAN(${p}),1),"")`,'0.0'],[L.highest,(p)=>`IF(COUNT(${p})=0,"",MAX(${p}))`,'0.0'],
+    [L.lowest,(p)=>`IF(COUNT(${p})=0,"",MIN(${p}))`,'0.0'],[L.stdev,(p)=>`IFERROR(ROUND(STDEV(${p}),1),"")`,'0.0']];
+  kpis.forEach(([lbl,f,fmt],ki)=>{
+    labelCell(r,lbl);
+    for(let k=0;k<SC;k++){const c=wsS.getCell(r,cCol(k));c.value={formula:f(CLS[k].PCT)};style(c,{bold:true,numFmt:fmt});}
+    const c=wsS.getCell(r,ALLC); c.value={formula:f(allPct)}; style(c,{bold:true,size:12,color:NAVY,numFmt:fmt,bg:'EEF2FF'});
     wsS.getRow(r).height=22; r++;
   });
-  const NCELL=`$B$${kStart}`;
+  const AVGROW=NROW+1;
+  wsS.addConditionalFormatting({ref:`${col(1)}${AVGROW}:${col(ALLC-1)}${AVGROW+3}`,rules:cfRules(numOr(`${col(1)}${AVGROW}`))});
+  const NCELL=(k)=>`${col(cCol(k)-1)}$${NROW}`, NALL=`$${col(ALLC-1)}$${NROW}`;
   r++;
-  // Distribution
+
+  // Distribution: counts
+  const cnt=(P,i)=> i===0 ? `COUNTIF(${P},"<"&${BMIN(1)})`
+                  : i<nb-1 ? `COUNTIFS(${P},">="&${BMIN(i)},${P},"<"&${BMIN(i+1)})`
+                  : `COUNTIF(${P},">="&${BMIN(i)})`;
   sectionTitle(L.distTitle,'B45309');
-  [L.band,L.from,L.to,L.count,L.share,L.chart].forEach((h,i)=>headerCell(wsS.getCell(r,i+1),h,NAVY2)); r++;
-  const dStart=r;
+  headRow(L.band,[[BARC,L.share]]);
+  const D0=r;
   bands.forEach((b,i)=>{
-    const lo=BMIN(i), hi=i<nb-1?BMIN(i+1):null;
-    const cnt= hi ? `COUNTIFS(${PCT},">="&${lo},${PCT},"<"&${hi})` : `COUNTIF(${PCT},">="&${lo})`;
-    const cells=[{formula:BNAME(i)},{formula:lo},hi?{formula:hi}:100,{formula:cnt},
-      {formula:`IF(${NCELL}=0,0,ROUND(D${r}/${NCELL}*100,1))`},{formula:`REPT("█",ROUND(E${r}/4,0))`}];
-    cells.forEach((v,k)=>{const c=wsS.getCell(r,k+1);c.value=v;
-      style(c,{bold:k===0||k===3,bg:k===0?bandLight(bands,i):(k===5?'FFFFFF':null),numFmt:k===4?'0.0':null,
-        color:k===5?bandColor(bands,i).slice(1):'1F2937',size:k===5?10:11,
-        align:k===5?{vertical:'middle',horizontal:L.rtl?'right':'left'}:center});});
+    const lab=wsS.getCell(r,1); lab.value={formula:legendText(i)}; style(lab,{bold:true,bg:bandLight(bands,i),color:DARK});
+    for(let k=0;k<SC;k++){const c=wsS.getCell(r,cCol(k));c.value={formula:cnt(CLS[k].PCT,i)};style(c,{bold:true});}
+    const c=wsS.getCell(r,ALLC);
+    c.value={formula:multi?`SUM(${col(1)}${r}:${col(ALLC-2)}${r})`:cnt(CLS[0].PCT,i)};
+    style(c,{bold:true,size:12,color:NAVY,bg:'EEF2FF'});
+    const sh=wsS.getCell(r,BARC);
+    sh.value={formula:`IF(${NALL}=0,"",TEXT(${col(ALLC-1)}${r}/${NALL}*100,"0.0")&"%  "&REPT("█",ROUND(${col(ALLC-1)}${r}/${NALL}*25,0)))`};
+    style(sh,{bold:true,size:10,color:traffic(bandT(bands,i),TL_TEXT),align:{vertical:'middle',horizontal:side}});
     wsS.getRow(r).height=22; r++;
   });
-  const tc=wsS.getCell(r,1); tc.value=L.totalRow; style(tc,{bold:true,color:'FFFFFF',bg:NAVY});
-  [2,3].forEach(k=>style(wsS.getCell(r,k),{bg:NAVY}));
-  const tcount=wsS.getCell(r,4); tcount.value={formula:`SUM(D${dStart}:D${r-1})`}; style(tcount,{bold:true,color:'FFFFFF',bg:NAVY});
-  const tshare=wsS.getCell(r,5); tshare.value={formula:`SUM(E${dStart}:E${r-1})`}; style(tshare,{bold:true,color:'FFFFFF',bg:NAVY,numFmt:'0'});
-  style(wsS.getCell(r,6),{bg:NAVY});
+  labelCell(r,L.totalRow,'E2E8F0');
+  for(let k=0;k<=SC;k++){const cc=k<SC?cCol(k):ALLC;const c=wsS.getCell(r,cc);c.value={formula:`SUM(${col(cc-1)}${D0}:${col(cc-1)}${r-1})`};style(c,{bold:true,bg:'E2E8F0'});}
+  style(wsS.getCell(r,BARC),{bg:'E2E8F0'});
   r+=2;
+
+  // Distribution: percentages per class
+  if(multi){
+    sectionTitle(L.distPctTitle,'B45309');
+    headRow(L.band);
+    bands.forEach((b,i)=>{
+      const lab=wsS.getCell(r,1); lab.value={formula:legendText(i)}; style(lab,{bold:true,bg:bandLight(bands,i),color:DARK});
+      for(let k=0;k<=SC;k++){
+        const cc=k<SC?cCol(k):ALLC, nref=k<SC?NCELL(k):NALL;
+        const c=wsS.getCell(r,cc);
+        c.value={formula:`IF(${nref}=0,"",ROUND(${col(cc-1)}${D0+i}/${nref}*100,1))`};
+        style(c,{bold:true,numFmt:'0.0',bg:k<SC?null:'EEF2FF'});
+      }
+      wsS.getRow(r).height=22; r++;
+    });
+    r++;
+  }
+
   // Group tables (Bloom / Section / Topic)
-  const QROW=(row)=>`${q(L.shGrades)}!$${qc(0)}$${row}:$${qc(Q-1)}$${row}`;
-  const SCORES=`${q(L.shGrades)}!$${qc(0)}$${R1}:$${qc(Q-1)}$${RN}`;
-  const groupTable=(title,bg,rowIdx,key)=>{
+  const groupTable=(title,bg,rowIdx,key,label)=>{
     const seen=[];questions.forEach(qq=>{const v=String(qq[key]||'').trim();if(v&&!seen.includes(v))seen.push(v);});
     if(!seen.length) return;
     sectionTitle(title,bg);
-    wsS.mergeCells(r,4,r,5);
-    [[1,key==='bloomSkill'?L.bloom:key==='section'?L.section:L.topic],[2,L.qCount],[3,L.maxSum],[4,L.avgPct],[6,L.chart]].forEach(([k,h])=>headerCell(wsS.getCell(r,k),h,NAVY2));
-    wsS.getRow(r).height=22; r++;
+    headRow(label,[[BARC,L.chart]]);
     const g0=r;
+    const META=CLS[0];
     seen.forEach(v=>{
-      const lab=wsS.getCell(r,1); lab.value=v;
-      style(lab,{bold:true,bg:key==='bloomSkill'?bloomFill(v):GREY,align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1,wrapText:true}});
-      const c2=wsS.getCell(r,2); c2.value={formula:`COUNTIF(${QROW(rowIdx)},$A${r})`}; style(c2,{});
-      const c3=wsS.getCell(r,3); c3.value={formula:`SUMIF(${QROW(rowIdx)},$A${r},${QROW(R_MX)})`}; style(c3,{numFmt:'0.##'});
-      wsS.mergeCells(r,4,r,5);
-      const c4=wsS.getCell(r,4);
-      c4.value={formula:`IF(OR(${NCELL}=0,C${r}=0),"",ROUND(SUMPRODUCT((${QROW(rowIdx)}=$A${r})*${SCORES})/(C${r}*${NCELL})*100,1))`};
-      style(c4,{bold:true,numFmt:'0.0'});
-      const c6=wsS.getCell(r,6); c6.value={formula:`IF(D${r}="","",REPT("█",ROUND(D${r}/4,0)))`};
-      style(c6,{size:10,color:'2563EB',align:{vertical:'middle',horizontal:L.rtl?'right':'left'}});
+      labelCell(r,v,key==='bloomSkill'?bloomFill(v):GREY);
+      const mx=`SUMIF(${META.ROW(rowIdx)},$A${r},${META.ROW(R_MX)})`;
+      const got=(c)=>`SUMIF(${c.ROW(rowIdx)},$A${r},${c.ROW(R_SUM)})`;
+      for(let k=0;k<SC;k++){
+        const c=wsS.getCell(r,cCol(k));
+        c.value={formula:`IF(OR(${CLS[k].N}=0,${mx}=0),"",ROUND(${got(CLS[k])}/(${mx}*${CLS[k].N})*100,1))`};
+        style(c,{bold:true,numFmt:'0.0'});
+      }
+      const c=wsS.getCell(r,ALLC);
+      c.value={formula:`IF(OR(SUM(${sumNs})=0,${mx}=0),"",ROUND((${CLS.map(got).join('+')})/(${mx}*SUM(${sumNs}))*100,1))`};
+      style(c,{bold:true,size:12,numFmt:'0.0'});
+      barCell(r,`${col(ALLC-1)}${r}`);
       wsS.getRow(r).height=key==='contentSkill'?30:22; r++;
     });
-    wsS.addConditionalFormatting({ref:`D${g0}:D${r-1}`,rules:cfRules(`IF(ISNUMBER($D${g0}),$D${g0},-1)`)});
+    wsS.addConditionalFormatting({ref:`${col(1)}${g0}:${col(ALLC-1)}${r-1}`,rules:cfRules(numOr(`${col(1)}${g0}`))});
     r++;
   };
-  groupTable(L.byBloom,'7C3AED',R_BL,'bloomSkill');
-  groupTable(L.bySection,'1D4ED8',R_SEC,'section');
-  groupTable(L.byTopic,'0F766E',R_TP,'contentSkill');
-  // Weakest / strongest
-  const HELP=`${q(L.shGrades)}!$${qc(0)}$${R_HELP}:$${qc(Q-1)}$${R_HELP}`;
-  const QNUMS=QROW(R_QN), TOPICS=QROW(R_TP);
+  groupTable(L.byBloom,'7C3AED',R_BL,'bloomSkill',L.bloom);
+  groupTable(L.bySection,'1D4ED8',R_SEC,'section',L.section);
+  groupTable(L.byTopic,'0F766E',R_TP,'contentSkill',L.topic);
+
+  // Weakest / strongest (all classes)
   const k3=Math.min(3,Q);
   [[L.weakest,'SMALL','B91C1C'],[L.strongest,'LARGE','15803D']].forEach(([title,fn,bg])=>{
     sectionTitle(title,bg);
-    wsS.mergeCells(r,2,r,5);
-    [[1,L.question],[2,L.topic],[6,L.avgPct]].forEach(([k,h])=>headerCell(wsS.getCell(r,k),h,NAVY2)); wsS.getRow(r).height=22; r++;
+    headerCell(wsS.getCell(r,1),L.question,NAVY2);
+    if(ALLC-1>2) wsS.mergeCells(r,2,r,ALLC-1);
+    headerCell(wsS.getCell(r,2),L.topic,NAVY2);
+    headerCell(wsS.getCell(r,ALLC===2?BARC:ALLC),L.avgPct,NAVY2);
+    wsS.getRow(r).height=24; r++;
+    const vcol=ALLC===2?BARC:ALLC;
+    const first=r;
     for(let k=1;k<=k3;k++){
-      const key=`${fn}(${HELP},${k})`;
-      const pos=`MATCH(${key},${HELP},0)`;
-      const c1=wsS.getCell(r,1); c1.value={formula:`IFERROR(INDEX(${QNUMS},1,${pos})&"","")`}; style(c1,{bold:true,bg:GREY});
-      wsS.mergeCells(r,2,r,5);
-      const c2=wsS.getCell(r,2); c2.value={formula:`IFERROR(INDEX(${TOPICS},1,${pos})&"","")`};
-      style(c2,{align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1,wrapText:true}});
-      const c6=wsS.getCell(r,6); c6.value={formula:`IFERROR(ROUND(${key},1),"")`}; style(c6,{bold:true,numFmt:'0.0'});
+      const key=`${fn}(${HELP},${k})`, pos=`MATCH(${key},${HELP},0)`;
+      const c1=wsS.getCell(r,1); c1.value={formula:`IFERROR(INDEX(${QNUMS},${pos})&"","")`}; style(c1,{bold:true,bg:GREY});
+      if(ALLC-1>2) wsS.mergeCells(r,2,r,ALLC-1);
+      const c2=wsS.getCell(r,2); c2.value={formula:`IFERROR(INDEX(${TOPICS},${pos})&"","")`}; style(c2,{align:startAlign});
+      const c3=wsS.getCell(r,vcol); c3.value={formula:`IFERROR(ROUND(${key},1),"")`}; style(c3,{bold:true,numFmt:'0.0'});
       wsS.getRow(r).height=24; r++;
     }
-    wsS.addConditionalFormatting({ref:`F${r-k3}:F${r-1}`,rules:cfRules(`IF(ISNUMBER($F${r-k3}),$F${r-k3},-1)`)});
+    const vl=col(vcol-1);
+    wsS.addConditionalFormatting({ref:`${vl}${first}:${vl}${r-1}`,rules:cfRules(numOr(`${vl}${first}`))});
     r++;
   });
-  wsS.pageSetup={orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
+  wsS.pageSetup={orientation:nC>3?'landscape':'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
   await wsS.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true});
 
   /* ── Guide sheet ── */
@@ -987,25 +1086,28 @@ async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subj
   L.guide.forEach(([a,b],i)=>{
     const rr=3+i;
     if(i===0){wsGuide.mergeCells(rr,1,rr,2);const c=wsGuide.getCell(rr,1);c.value=a;
-      style(c,{bold:true,size:13,color:NAVY,border:false,align:{vertical:'middle',horizontal:L.rtl?'right':'left'}});wsGuide.getRow(rr).height=26;return;}
+      style(c,{bold:true,size:13,color:NAVY,border:false,align:{vertical:'middle',horizontal:side}});wsGuide.getRow(rr).height=26;return;}
     const ca=wsGuide.getCell(rr,1), cb=wsGuide.getCell(rr,2);
     ca.value=a; style(ca,{bold:true,color:'FFFFFF',bg:i===L.guide.length-1?'64748B':'EA580C'});
-    cb.value=b; style(cb,{bg:i%2?'FFFFFF':ZEBRA,align:{vertical:'middle',horizontal:L.rtl?'right':'left',wrapText:true,indent:1}});
+    cb.value=b.replace('%ALL%',SH_ALL); style(cb,{bg:i%2?'FFFFFF':ZEBRA,align:startAlign});
     wsGuide.getRow(rr).height=30;
   });
-  const lg=4+L.guide.length;
+  let lg=4+L.guide.length;
+  wsGuide.getCell(lg,1).value=`${L.classLbl}:`; style(wsGuide.getCell(lg,1),{bold:true,border:false});
+  wsGuide.getCell(lg,2).value=classNames.join('   •   '); style(wsGuide.getCell(lg,2),{bold:true,color:NAVY,border:false,align:startAlign});
+  lg+=2;
   wsGuide.getCell(lg,1).value=L.legend; style(wsGuide.getCell(lg,1),{bold:true,border:false});
   bands.forEach((b,i)=>{
     const rr=lg+1+i;
-    const c=wsGuide.getCell(rr,1); style(c,{bg:bandLight(bands,i)});
-    const d=wsGuide.getCell(rr,2); d.value={formula:`${BNAME(i)}&"   ("&${BMIN(i)}&" – "&${i<nb-1?BMIN(i+1):'100'}&")"`};
-    style(d,{bold:true,color:bandColor(bands,i).slice(1),align:{vertical:'middle',horizontal:L.rtl?'right':'left',indent:1}});
+    style(wsGuide.getCell(rr,1),{bg:bandLight(bands,i)});
+    const d=wsGuide.getCell(rr,2); d.value={formula:legendText(i)};
+    style(d,{bold:true,color:DARK,align:startAlign});
     wsGuide.getRow(rr).height=22;
   });
 
   /* ── meta (lets the platform read the file back reliably) ── */
-  wsM.getCell('A1').value=JSON.stringify({app:'mapping_with_muna',v:2,lang,firstRow:R1,lastRow:RN,firstQCol:FQ+1,qCount:Q,
-    bandsSheet:L.shBands,gradesSheet:L.shGrades,bandsFirstRow:B0,bandCount:nb,maxRow:R_MX,secRow:R_SEC,qnRow:R_QN,blRow:R_BL,tpRow:R_TP});
+  wsM.getCell('A1').value=JSON.stringify({app:'mapping_with_muna',v:3,lang,classes:classNames,firstRow:R1,lastRow:RN,firstQCol:FQ+1,qCount:Q,
+    bandsSheet:L.shBands,bandsFirstRow:B0,bandCount:nb,maxRow:R_MX,secRow:R_SEC,qnRow:R_QN,blRow:R_BL,tpRow:R_TP});
 
   wb.views=[{activeTab:1,firstSheet:0,visibility:'visible'}];
   return wb;
@@ -1029,7 +1131,9 @@ async function readScreeningWorkbook(ExcelJS,arrayBuffer){
   const meta=wb.getWorksheet('_meta');
   if(!meta) throw new Error('nometa');
   const M=JSON.parse(cellText(meta.getCell('A1').value));
-  const ws=wb.getWorksheet(M.gradesSheet)||wb.worksheets[1];
+  const classList=M.classes||[M.gradesSheet];
+  const sheets=classList.map(n=>({name:n,ws:wb.getWorksheet(n)})).filter(x=>x.ws);
+  if(!sheets.length) throw new Error('nosheets');
   const wsB=wb.getWorksheet(M.bandsSheet);
   let bands=null;
   if(wsB){
@@ -1038,43 +1142,54 @@ async function readScreeningWorkbook(ExcelJS,arrayBuffer){
       const r=M.bandsFirstRow+i;
       b.push({name:cellText(wsB.getCell(r,2).value).trim(),min:cellNum(wsB.getCell(r,3).value)});
     }
+    const top=cellNum(wsB.getCell(M.bandsFirstRow+M.bandCount-1,4).value);
+    b[b.length-1].max=top===null?100:top;
     if(!validateBands(b)) bands=b;
   }
+  const ws0=sheets[0].ws;
   const questions=[];
   for(let j=0;j<M.qCount;j++){
     const C=M.firstQCol+j;
-    let sec=cellText(ws.getCell(M.secRow,C).value);
-    questions.push({section:sec,qNum:cellText(ws.getCell(M.qnRow,C).value),bloomSkill:cellText(ws.getCell(M.blRow,C).value),
-      contentSkill:cellText(ws.getCell(M.tpRow,C).value),max:cellNum(ws.getCell(M.maxRow,C).value)||0});
+    questions.push({section:cellText(ws0.getCell(M.secRow,C).value),qNum:cellText(ws0.getCell(M.qnRow,C).value),bloomSkill:cellText(ws0.getCell(M.blRow,C).value),
+      contentSkill:cellText(ws0.getCell(M.tpRow,C).value),max:cellNum(ws0.getCell(M.maxRow,C).value)||0});
   }
   const totalMax=questions.reduce((a,q)=>a+q.max,0);
   const students=[];
-  for(let r=M.firstRow;r<=M.lastRow;r++){
-    const vals=questions.map((q,j)=>cellNum(ws.getCell(r,M.firstQCol+j).value));
-    if(vals.every(v=>v===null)) continue;
-    const name=cellText(ws.getCell(r,2).value).trim()||`#${r-M.firstRow+1}`;
-    const pts=vals.map((v,j)=>Math.min(Math.max(v||0,0),questions[j].max));
-    const total=pts.reduce((a,b)=>a+b,0);
-    students.push({name,pts,total,pct:totalMax?Math.round(total/totalMax*1000)/10:0});
-  }
-  return {questions,students,bands,totalMax,lang:M.lang};
+  sheets.forEach(({name,ws})=>{
+    for(let r=M.firstRow;r<=M.lastRow;r++){
+      const vals=questions.map((q,j)=>cellNum(ws.getCell(r,M.firstQCol+j).value));
+      if(vals.every(v=>v===null)) continue;
+      const nm=cellText(ws.getCell(r,2).value).trim()||`#${r-M.firstRow+1}`;
+      const pts=vals.map((v,j)=>Math.min(Math.max(v||0,0),questions[j].max));
+      const total=pts.reduce((a,b)=>a+b,0);
+      students.push({name:nm,cls:name,pts,total,pct:totalMax?Math.round(total/totalMax*1000)/10:0});
+    }
+  });
+  return {questions,students,bands,totalMax,lang:M.lang,classes:sheets.map(s=>s.name)};
 }
 
 /* analytics from a read workbook */
 function analyticsFromWorkbook(res,bands){
   const {questions,students}=res;
+  const classes=res.classes||[];
   const n=students.length;
   const scores=students.map(s=>s.pct);
-  const perQuestion=questions.map((q,j)=>({...q,avgPct:n&&q.max?Math.round(students.reduce((a,s)=>a+s.pts[j],0)/(q.max*n)*1000)/10:0}));
+  const qAvg=(list,j)=>list.length&&questions[j].max?Math.round(list.reduce((a,s)=>a+s.pts[j],0)/(questions[j].max*list.length)*1000)/10:0;
+  const perQuestion=questions.map((q,j)=>({...q,avgPct:qAvg(students,j),byClass:classes.map(c=>qAvg(students.filter(s=>s.cls===c),j))}));
   const group=(key)=>{
     const m={};
-    perQuestion.forEach((q,j)=>{const k=String(q[key]||'').trim();if(!k)return;(m[k]=m[k]||{name:k,max:0,got:0,count:0});m[k].max+=q.max;m[k].count++;m[k].got+=students.reduce((a,s)=>a+s.pts[j],0);});
+    questions.forEach((q,j)=>{const k=String(q[key]||'').trim();if(!k)return;(m[k]=m[k]||{name:k,max:0,got:0,count:0});m[k].max+=q.max;m[k].count++;m[k].got+=students.reduce((a,s)=>a+s.pts[j],0);});
     return Object.values(m).map(g=>({name:g.name,count:g.count,avgPct:n&&g.max?Math.round(g.got/(g.max*n)*1000)/10:0}));
   };
+  const classStats=classes.map(c=>{
+    const sc=students.filter(s=>s.cls===c).map(s=>s.pct);
+    return {name:c,n:sc.length,average:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length*10)/10:0,counts:buildDist(sc,bands)};
+  });
   return {
     scores, counts:buildDist(scores,bands), bands:bands.map(b=>({...b})),
     totalStudents:n, average:n?scores.reduce((a,b)=>a+b,0)/n:0,
-    students:students.map(s=>({name:s.name,pct:s.pct,total:s.total})),
+    students:students.map(s=>({name:s.name,cls:s.cls,pct:s.pct,total:s.total})),
+    classes:classStats,
     perQuestion, byBloom:group('bloomSkill'), bySection:group('section')
   };
 }
@@ -1090,10 +1205,14 @@ const EX={
     pasteClaude:'الصق/ي رد Claude هنا (يكفي لصق الرد كاملًا، والمنصة تلتقط الجدول منه)', parsedOk:'✓ تمت قراءة %1 سؤالًا — المجموع %2',
     reportTitle:'تقرير معمّق وخطة تدخل مع Claude', reportSub:'ينسخ ملخص النتائج (المجالات، بلوم، الأقسام، كل سؤال) ويفتح Claude ليكتب لك تقريرًا مهنيًا بصيغة Word مع خطة تدخل لكل مجموعة.',
     reportBtn:'أنشئ التقرير في Claude', reportPrivacy:'لا تُرسل أسماء الطلاب، فقط إحصاءات الصف.',
-    bandsTitle:'مجالات توزيع العلامات', bandsSub:'حدد/ي عدد المجالات المعتمدة في مدرستك وأسماءها وحدودها الدنيا. ستُبنى كل الحسابات والألوان في ملف الإكسل وفي التحليل حسبها.',
+    bandsTitle:'مجالات توزيع العلامات', bandsSub:'حدد/ي عدد المجالات المعتمدة في مدرستك وأسماءها وحدودها. ستُبنى كل الحسابات والألوان في ملف الإكسل وفي التحليل حسبها.',
     bandsCount:'عدد المجالات', bandName:'اسم المجال', bandMin:'من (الحد الأدنى)', bandTo:'إلى', bandReset:'استعادة القيم المقترحة',
-    nStudents:'عدد صفوف الطلاب في الملف',
-    bandErr:{count:'عدد المجالات يجب أن يكون بين 4 و 6.',first:'المجال الأول يجب أن يبدأ من 0.',name:'يرجى كتابة اسم لكل مجال.',range:'الحدود يجب أن تكون أرقامًا بين 0 و 99.',order:'الحدود الدنيا يجب أن تكون تصاعدية (كل مجال يبدأ بعد السابق).'},
+    nStudents:'عدد أسطر الطلاب في ورقة كل صف',
+    bandFrom:'من', bandUpTo:'إلى', bandClampNote:'يمكنك تعديل الحد الأدنى للمجال الأول والحد الأعلى للمجال الأخير. العلامة الأقل من الحد الأدنى تُحسب ضمن المجال الأول، والأعلى من الحد الأعلى ضمن المجال الأخير.',
+    classesTitle:'الصفوف (الشُّعب) المشمولة', classesSub:'سيحتوي ملف الإكسل على ورقة رصد لكل صف، وورقة إضافية تحلل نتائج جميع الصفوف وتقارن بينها.',
+    classesCount:'عدد الصفوف', classNamesLbl:'أسماء الصفوف (تصبح أسماء الأوراق في الملف)', classErrEmpty:'يرجى كتابة اسم لكل صف.', classErrDup:'أسماء الصفوف يجب أن تكون مختلفة.',
+    classCmp:'مقارنة بين الصفوف', clsCol:'الصف', nCol:'عدد الطلاب', avgCol:'المعدل',
+    bandErr:{count:'عدد المجالات يجب أن يكون بين 4 و 6.',top:'الحد الأعلى للمجال الأخير يجب أن يكون أكبر من حده الأدنى ولا يتجاوز 100.',name:'يرجى كتابة اسم لكل مجال.',range:'الحدود يجب أن تكون أرقامًا بين 0 و 100.',order:'الحدود الدنيا يجب أن تكون تصاعدية (كل مجال يبدأ بعد السابق).'},
     excelBuilding:'جارٍ بناء الملف...', excelLibErr:'تعذّر تحميل مكتبة الإكسل. تأكد/ي من الاتصال بالإنترنت وأعد/ي تحميل الصفحة.',
     totalWarn:'تنبيه: مجموع العلامات القصوى للأسئلة هو %1 وليس 100. سيحسب الملف النسبة المئوية تلقائيًا.',
     uploadTitle:'الطريقة الموصى بها: ارفع/ي ملف الإكسل بعد تعبئته', uploadBtn:'📂 اختيار ملف الإكسل المعبّأ', uploadHint:'تقرأ المنصة علامات كل طالب في كل سؤال وتُعدّ تحليلًا كاملًا.',
@@ -1112,8 +1231,12 @@ const EX={
     reportBtn:'יצירת הדוח ב-Claude', reportPrivacy:'שמות התלמידים לא נשלחים – רק נתונים כיתתיים.',
     bandsTitle:'טווחי התפלגות הציונים', bandsSub:'בחרו את מספר הטווחים הנהוג בבית הספר, את שמותיהם ואת הסף התחתון של כל טווח. כל החישובים והצבעים בקובץ ובניתוח ייבנו לפיהם.',
     bandsCount:'מספר טווחים', bandName:'שם הטווח', bandMin:'מ- (סף תחתון)', bandTo:'עד', bandReset:'שחזור ערכים מוצעים',
-    nStudents:'מספר שורות תלמידים בקובץ',
-    bandErr:{count:'מספר הטווחים חייב להיות בין 4 ל-6.',first:'הטווח הראשון חייב להתחיל ב-0.',name:'יש לתת שם לכל טווח.',range:'הספים חייבים להיות מספרים בין 0 ל-99.',order:'הספים חייבים להיות בסדר עולה.'},
+    nStudents:'מספר שורות תלמידים בגיליון של כל כיתה',
+    bandFrom:'מ-', bandUpTo:'עד', bandClampNote:'ניתן לשנות את הגבול התחתון של הטווח הראשון ואת העליון של האחרון. ציון מתחת לגבול התחתון נספר בטווח הראשון, ומעל לעליון – בטווח האחרון.',
+    classesTitle:'הכיתות הנכללות', classesSub:'קובץ האקסל יכלול גיליון הזנה לכל כיתה וגיליון נוסף המנתח ומשווה את תוצאות כל הכיתות.',
+    classesCount:'מספר כיתות', classNamesLbl:'שמות הכיתות (שמות הגיליונות בקובץ)', classErrEmpty:'יש לתת שם לכל כיתה.', classErrDup:'שמות הכיתות חייבים להיות שונים.',
+    classCmp:'השוואה בין הכיתות', clsCol:'כיתה', nCol:'מספר תלמידים', avgCol:'ממוצע',
+    bandErr:{count:'מספר הטווחים חייב להיות בין 4 ל-6.',top:'הגבול העליון של הטווח האחרון חייב להיות גדול מהתחתון ולא יותר מ-100.',name:'יש לתת שם לכל טווח.',range:'הגבולות חייבים להיות מספרים בין 0 ל-100.',order:'הספים חייבים להיות בסדר עולה.'},
     excelBuilding:'בונה את הקובץ...', excelLibErr:'לא ניתן לטעון את ספריית האקסל. בדקו את החיבור לאינטרנט ורעננו את הדף.',
     totalWarn:'שימו לב: סך הניקוד המרבי הוא %1 ולא 100. הקובץ יחשב את האחוז אוטומטית.',
     uploadTitle:'מומלץ: העלו את קובץ האקסל לאחר מילוי', uploadBtn:'📂 בחירת קובץ אקסל ממולא', uploadHint:'הפלטפורמה קוראת את ציון כל תלמיד בכל שאלה ומכינה ניתוח מלא.',
@@ -1132,8 +1255,12 @@ const EX={
     reportBtn:'Create the report in Claude', reportPrivacy:'Student names are not sent — only class statistics.',
     bandsTitle:'Performance Ranges', bandsSub:'Choose how many ranges your school uses, their names and lower bounds. All Excel calculations, colors and the analysis will follow them.',
     bandsCount:'Number of ranges', bandName:'Range name', bandMin:'From (lower bound)', bandTo:'To', bandReset:'Restore suggested values',
-    nStudents:'Student rows in the file',
-    bandErr:{count:'Use 4 to 6 ranges.',first:'The first range must start at 0.',name:'Please name every range.',range:'Bounds must be numbers between 0 and 99.',order:'Lower bounds must increase from range to range.'},
+    nStudents:'Student rows per class sheet',
+    bandFrom:'From', bandUpTo:'To', bandClampNote:'You can change the lowest bound of the first range and the top of the last one. Scores below the lowest bound count in the first range; scores above the top in the last range.',
+    classesTitle:'Classes included', classesSub:'The Excel file will have an entry sheet per class plus a sheet that analyzes and compares all classes.',
+    classesCount:'Number of classes', classNamesLbl:'Class names (become sheet names)', classErrEmpty:'Please name every class.', classErrDup:'Class names must be different.',
+    classCmp:'Class comparison', clsCol:'Class', nCol:'Students', avgCol:'Average',
+    bandErr:{count:'Use 4 to 6 ranges.',top:'The top of the last range must be above its lower bound and at most 100.',name:'Please name every range.',range:'Bounds must be numbers between 0 and 100.',order:'Lower bounds must increase from range to range.'},
     excelBuilding:'Building the file...', excelLibErr:'Could not load the Excel library. Check your connection and reload the page.',
     totalWarn:'Note: question maximums add up to %1, not 100. The file converts to percent automatically.',
     uploadTitle:'Recommended: upload the filled Excel file', uploadBtn:'📂 Choose the filled Excel file', uploadHint:'The platform reads every student\'s score per question and builds a full analysis.',
@@ -1156,39 +1283,83 @@ function planGroups(bands){
   return {intensive:[0],strategic:Array.from({length:n-2},(_,i)=>i+1),enrich:[n-1]};
 }
 
-const BandEditor=({bands,setBands,lang,t,nStudents,setNStudents})=>{
+const BandEditor=({bands,setBands,lang,t})=>{
   const err=validateBands(bands);
-  const setCount=(n)=>setBands(presetBands(lang,n));
-  const upd=(i,k,v)=>setBands(bands.map((b,j)=>j===i?{...b,[k]:k==='min'?(v===''?'':Number(v)):v}:b));
+  const n=bands.length;
+  const setCount=(k)=>setBands(presetBands(lang,k));
+  const num=(v)=>v===''?'':Number(v);
+  const upd=(i,k,v)=>setBands(bands.map((b,j)=>j===i?{...b,[k]:k==='name'?v:num(v)}:b));
   const inp={padding:'8px 10px',borderRadius:'10px',border:'2px solid #e5e7eb',outline:'none',fontSize:'.95rem',fontFamily:"'Cairo',sans-serif",width:'100%'};
+  const edge={...inp,borderColor:'#a5b4fc',background:'#eef2ff',textAlign:'center',fontWeight:800};
+  const cols='16px 1fr 96px 96px';
   return(
     <div className="p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/40 fade-in">
       <h3 style={{fontSize:'1.15rem',fontWeight:800,color:'#1e3a5f',marginBottom:'4px'}}>🎯 {t.bandsTitle}</h3>
       <p style={{fontSize:'.88rem',color:'#475569',marginBottom:'14px'}}>{t.bandsSub}</p>
       <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
         <span style={{fontWeight:700,color:'#374151'}}>{t.bandsCount}:</span>
-        {[4,5,6].map(n=>(
-          <button key={n} onClick={()=>setCount(n)} style={{width:'44px',height:'40px',borderRadius:'12px',fontWeight:800,cursor:'pointer',
-            border:'2px solid '+(bands.length===n?'#4f46e5':'#e5e7eb'),background:bands.length===n?'#4f46e5':'white',color:bands.length===n?'white':'#374151'}}>{n}</button>
+        {[4,5,6].map(k=>(
+          <button key={k} onClick={()=>setCount(k)} style={{width:'44px',height:'40px',borderRadius:'12px',fontWeight:800,cursor:'pointer',
+            border:'2px solid '+(n===k?'#4f46e5':'#e5e7eb'),background:n===k?'#4f46e5':'white',color:n===k?'white':'#374151'}}>{k}</button>
         ))}
-        <button onClick={()=>setCount(bands.length)} style={{marginInlineStart:'auto',fontSize:'.8rem',color:'#4f46e5',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>{t.bandReset}</button>
+        <button onClick={()=>setCount(n)} style={{marginInlineStart:'auto',fontSize:'.8rem',color:'#4f46e5',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>{t.bandReset}</button>
       </div>
       <div style={{display:'grid',gap:'8px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'14px 1fr 110px 70px',gap:'8px',fontSize:'.78rem',fontWeight:700,color:'#64748b'}}>
-          <span/><span>{t.bandName}</span><span>{t.bandMin}</span><span>{t.bandTo}</span>
+        <div style={{display:'grid',gridTemplateColumns:cols,gap:'8px',fontSize:'.78rem',fontWeight:700,color:'#64748b',textAlign:'center'}}>
+          <span/><span style={{textAlign:'start'}}>{t.bandName}</span><span>{t.bandFrom}</span><span>{t.bandUpTo}</span>
         </div>
         {bands.map((b,i)=>(
-          <div key={i} style={{display:'grid',gridTemplateColumns:'14px 1fr 110px 70px',gap:'8px',alignItems:'center'}}>
-            <span style={{width:'14px',height:'14px',borderRadius:'50%',background:bandColor(bands,i)}}/>
+          <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:'8px',alignItems:'center'}}>
+            <span style={{width:'16px',height:'16px',borderRadius:'4px',background:'#'+bandLight(bands,i),border:'1px solid rgba(0,0,0,.12)'}}/>
             <input value={b.name} onChange={e=>upd(i,'name',e.target.value)} style={inp}/>
-            <input type="number" min="0" max="99" step="0.5" value={b.min} disabled={i===0}
-              onChange={e=>upd(i,'min',e.target.value)} style={{...inp,background:i===0?'#f1f5f9':'white',textAlign:'center'}}/>
-            <span style={{textAlign:'center',fontWeight:700,color:'#475569',fontSize:'.9rem'}}>{i<bands.length-1?`> ${bands[i+1].min}`:'100'}</span>
+            <input type="number" min="0" max="99" step="0.5" value={b.min} onChange={e=>upd(i,'min',e.target.value)} style={i===0?edge:{...inp,textAlign:'center'}}/>
+            {i<n-1
+              ? <span style={{textAlign:'center',fontWeight:700,color:'#475569',fontSize:'.9rem'}}>{bands[i+1].min}</span>
+              : <input type="number" min="1" max="100" step="0.5" value={b.max===undefined?100:b.max} onChange={e=>upd(i,'max',e.target.value)} style={edge}/>}
           </div>
         ))}
       </div>
-      {err&&<div style={{marginTop:'10px',color:'#b91c1c',fontWeight:700,fontSize:'.88rem'}}>⚠️ {t.bandErr[err]}</div>}
-      <div style={{display:'flex',alignItems:'center',gap:'10px',marginTop:'14px',paddingTop:'12px',borderTop:'1px dashed #c7d2fe'}}>
+      <p style={{fontSize:'.78rem',color:'#6366f1',marginTop:'10px'}}>ℹ️ {t.bandClampNote}</p>
+      {err&&<div style={{marginTop:'8px',color:'#b91c1c',fontWeight:700,fontSize:'.88rem'}}>⚠️ {t.bandErr[err]}</div>}
+    </div>
+  );
+};
+
+function validateClasses(classes){
+  if(!classes.length||classes.some(c=>!String(c||'').trim())) return 'classErrEmpty';
+  const low=classes.map(c=>String(c).trim().toLowerCase());
+  if(new Set(low).size!==low.length) return 'classErrDup';
+  return null;
+}
+const ClassEditor=({classes,setClasses,lang,t,grade,nStudents,setNStudents})=>{
+  const n=classes.length;
+  const setCount=(k)=>{
+    k=Math.max(1,Math.min(12,parseInt(k)||1));
+    const def=defaultClassNames(lang,k,grade);
+    // keep names the user already typed, fill the rest with defaults
+    const keep=n>1?classes:[];
+    setClasses(def.map((d,i)=>keep[i]!==undefined&&k>1?keep[i]:d));
+  };
+  const err=validateClasses(classes);
+  const inp={padding:'8px 10px',borderRadius:'10px',border:'2px solid #e5e7eb',outline:'none',fontSize:'.95rem',fontFamily:"'Cairo',sans-serif",width:'100%'};
+  return(
+    <div className="p-5 rounded-2xl border-2 fade-in" style={{borderColor:'#bae6fd',background:'#f0f9ff'}}>
+      <h3 style={{fontSize:'1.15rem',fontWeight:800,color:'#1e3a5f',marginBottom:'4px'}}>🏫 {t.classesTitle}</h3>
+      <p style={{fontSize:'.88rem',color:'#475569',marginBottom:'14px'}}>{t.classesSub}</p>
+      <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+        <span style={{fontWeight:700,color:'#374151'}}>{t.classesCount}:</span>
+        <button onClick={()=>setCount(n-1)} disabled={n<=1} style={{width:'40px',height:'40px',borderRadius:'12px',border:'2px solid #e5e7eb',background:'white',fontWeight:900,fontSize:'1.2rem',cursor:'pointer',opacity:n<=1?.4:1}}>−</button>
+        <span style={{minWidth:'34px',textAlign:'center',fontWeight:900,fontSize:'1.3rem',color:'#0369a1'}}>{n}</span>
+        <button onClick={()=>setCount(n+1)} disabled={n>=12} style={{width:'40px',height:'40px',borderRadius:'12px',border:'2px solid #e5e7eb',background:'white',fontWeight:900,fontSize:'1.2rem',cursor:'pointer',opacity:n>=12?.4:1}}>+</button>
+      </div>
+      <label style={{display:'block',fontSize:'.8rem',fontWeight:700,color:'#64748b',marginBottom:'6px'}}>{t.classNamesLbl}</label>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'8px'}}>
+        {classes.map((c,i)=>(
+          <input key={i} value={c} maxLength={28} onChange={e=>setClasses(classes.map((x,j)=>j===i?e.target.value:x))} style={inp}/>
+        ))}
+      </div>
+      {err&&<div style={{marginTop:'8px',color:'#b91c1c',fontWeight:700,fontSize:'.88rem'}}>⚠️ {t[err]}</div>}
+      <div style={{display:'flex',alignItems:'center',gap:'10px',marginTop:'14px',paddingTop:'12px',borderTop:'1px dashed #bae6fd'}}>
         <label style={{fontWeight:700,color:'#374151',fontSize:'.9rem'}}>{t.nStudents}:</label>
         <input type="number" min="5" max="60" value={nStudents} onChange={e=>setNStudents(e.target.value)} style={{...inp,width:'90px',textAlign:'center'}}/>
       </div>
@@ -1199,7 +1370,7 @@ const BandEditor=({bands,setBands,lang,t,nStudents,setNStudents})=>{
 const PctBadge=({v,bands})=>{
   const i=bandIndex(v,bands);
   return <span style={{display:'inline-block',minWidth:'54px',padding:'2px 10px',borderRadius:'20px',fontWeight:800,fontSize:'.82rem',
-    background:'#'+bandLight(bands,i),color:bandColor(bands,i)}}>{Number(v).toFixed(1)}</span>;
+    background:'#'+bandSoft(bands,i),color:bandColor(bands,i)}}>{Number(v).toFixed(1)}</span>;
 };
 
 const DeepAnalysis=({analytics,t})=>{
@@ -1221,8 +1392,34 @@ const DeepAnalysis=({analytics,t})=>{
       </table>
     </div>):null;
   if(!pq.length) return null;
+  const cls=analytics.classes||[];
   return(
     <div className="space-y-5">
+      {cls.length>1&&(
+        <div className="rounded-2xl border overflow-x-auto">
+          <div style={{background:'#0369a1',color:'white',fontWeight:800,padding:'8px 12px'}}>🏫 {t.classCmp}</div>
+          <table className="w-full text-center">
+            <thead><tr>
+              <th style={th}>{t.clsCol}</th><th style={th}>{t.nCol}</th><th style={th}>{t.avgCol}</th>
+              {bands.map((b,i)=><th key={i} style={{...th,background:'#'+bandLight(bands,i),color:'#111827'}}>{b.name}</th>)}
+            </tr></thead>
+            <tbody>
+              {cls.map((c,k)=>(
+                <tr key={k} style={{background:k%2?'#f8fafc':'white'}}>
+                  <td style={{...td,fontWeight:800}}>{c.name}</td><td style={td}>{c.n}</td>
+                  <td style={td}>{c.n?<PctBadge v={c.average} bands={bands}/>:'—'}</td>
+                  {c.counts.map((x,i)=><td key={i} style={{...td,fontWeight:700}}>{x}<span style={{color:'#94a3b8',fontWeight:500,fontSize:'.75rem'}}>{c.n?`  (${Math.round(x/c.n*100)}%)`:''}</span></td>)}
+                </tr>
+              ))}
+              <tr style={{background:'#eef2ff'}}>
+                <td style={{...td,fontWeight:900}}>Σ</td><td style={{...td,fontWeight:800}}>{analytics.totalStudents}</td>
+                <td style={td}><PctBadge v={analytics.average} bands={bands}/></td>
+                {analytics.counts.map((x,i)=><td key={i} style={{...td,fontWeight:800}}>{x}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
       {weak.length>0&&(
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200">
           <div style={{fontWeight:800,color:'#991b1b',marginBottom:'8px'}}>🔎 {t.weakQs}</div>
@@ -1239,11 +1436,14 @@ const DeepAnalysis=({analytics,t})=>{
       <div className="rounded-2xl border overflow-x-auto">
         <div style={{background:'#0f766e',color:'white',fontWeight:800,padding:'8px 12px'}}>{t.qAnalysis}</div>
         <table className="w-full text-center">
-          <thead><tr><th style={th}>{t.question}</th><th style={th}>Section</th><th style={th}>Bloom</th><th style={th}>{t.avgPct}</th><th style={th}>{t.level}</th></tr></thead>
+          <thead><tr><th style={th}>{t.question}</th><th style={th}>Section</th><th style={th}>Bloom</th>
+            {cls.length>1&&cls.map(c=><th key={c.name} style={{...th,background:'#0f766e'}}>{c.name}</th>)}
+            <th style={th}>{t.avgPct}</th><th style={th}>{t.level}</th></tr></thead>
           <tbody>{pq.map((q,i)=>(
             <tr key={i} style={{background:i%2?'#f8fafc':'white'}}>
               <td style={{...td,fontWeight:700}}>{q.qNum}</td><td style={td}>{q.section}</td>
               <td style={td}><span style={{color:bloomColor(q.bloomSkill),fontWeight:700}}>{q.bloomSkill}</span></td>
+              {cls.length>1&&(q.byClass||[]).map((v,k)=><td key={k} style={td}><PctBadge v={v} bands={bands}/></td>)}
               <td style={td}><PctBadge v={q.avgPct} bands={bands}/></td>
               <td style={{...td,fontWeight:700,color:bandColor(bands,bandIndex(q.avgPct,bands))}}>{bands[bandIndex(q.avgPct,bands)].name}</td>
             </tr>))}</tbody>
@@ -1258,23 +1458,29 @@ async function exportBandLists({analytics,t,lang,teacher}){
   const bands=analytics.bands, L=XL[lang]||XL.ar;
   const wb=new ExcelJS.Workbook();
   const rows=analytics.students||analytics.scores.map((s,i)=>({name:`#${i+1}`,pct:s}));
+  const multi=(analytics.classes||[]).length>1;
+  const heads=multi?['#',t.student,t.clsCol,t.pctCol]:['#',t.student,t.pctCol];
+  const names=sheetSafeNames(bands.map(b=>b.name),[]);
   bands.forEach((b,i)=>{
-    const ws=wb.addWorksheet(String(b.name).replace(/[\\\/\?\*\[\]:]/g,' ').substring(0,28)||`B${i+1}`,
-      {views:[{rightToLeft:L.rtl,showGridLines:false}],properties:{tabColor:{argb:'FF'+bandColor(bands,i).slice(1)}}});
-    ws.columns=[{width:6},{width:30},{width:14}];
-    ws.mergeCells('A1:C1');
+    const ws=wb.addWorksheet(names[i],{views:[{rightToLeft:L.rtl,showGridLines:false}],properties:{tabColor:{argb:'FF'+bandLight(bands,i)}}});
+    ws.columns=multi?[{width:6},{width:30},{width:16},{width:14}]:[{width:6},{width:30},{width:14}];
+    const last=String.fromCharCode(64+heads.length);
+    ws.mergeCells(`A1:${last}1`);
     ws.getCell('A1').value=`${b.name} (${bandRangeLabel(bands,i)})${teacher.grade?' — '+teacher.grade:''}`;
-    ws.getCell('A1').font={name:'Arial',bold:true,size:14,color:{argb:'FFFFFFFF'}};
-    ws.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bandColor(bands,i).slice(1)}};
+    ws.getCell('A1').font={name:'Arial',bold:true,size:14,color:{argb:'FF111827'}};
+    ws.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bandLight(bands,i)}};
     ws.getCell('A1').alignment={horizontal:'center',vertical:'middle'}; ws.getRow(1).height=30;
-    ['#',t.student,t.pctCol].forEach((h,k)=>{const c=ws.getCell(3,k+1);c.value=h;c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'}};
+    heads.forEach((h,k)=>{const c=ws.getCell(3,k+1);c.value=h;c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'}};
       c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1E3A5F'}};c.alignment={horizontal:'center'};});
-    rows.filter(s=>bandIndex(s.pct,bands)===i).sort((a,b)=>a.pct-b.pct).forEach((s,k)=>{
-      const r=4+k;[k+1,s.name,s.pct].forEach((v,m)=>{const c=ws.getCell(r,m+1);c.value=v;c.font={name:'Arial'};
-        c.alignment={horizontal:m===1?(L.rtl?'right':'left'):'center'};
-        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(k%2?'F8FAFC':'FFFFFF')}};
-        c.border={bottom:{style:'thin',color:{argb:'FFE5E7EB'}}};});
-    });
+    rows.filter(s=>bandIndex(s.pct,bands)===i)
+      .sort((a,b)=>multi&&a.cls!==b.cls?String(a.cls).localeCompare(String(b.cls)):a.pct-b.pct)
+      .forEach((s,k)=>{
+        const r=4+k, vals=multi?[k+1,s.name,s.cls||'',s.pct]:[k+1,s.name,s.pct];
+        vals.forEach((v,m)=>{const c=ws.getCell(r,m+1);c.value=v;c.font={name:'Arial'};
+          c.alignment={horizontal:m===1?(L.rtl?'right':'left'):'center'};
+          c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+(k%2?'F8FAFC':'FFFFFF')}};
+          c.border={bottom:{style:'thin',color:{argb:'FFE5E7EB'}}};});
+      });
   });
   await downloadWorkbook(wb,`groups_${teacher.grade||'class'}.xlsx`);
 }
@@ -1374,6 +1580,8 @@ function buildClaudeReportPrompt({analytics,lang,subjectName,teacher}){
   const dist=B.map((b,i)=>`- ${b.name} (${bandRangeLabel(B,i)}): ${analytics.counts[i]} (${n?(analytics.counts[i]/n*100).toFixed(1):0}%)`).join('\n');
   const qs=(analytics.perQuestion||[]).map(q=>`| ${q.section} | ${q.qNum} | ${q.bloomSkill} | ${q.contentSkill} | ${q.max} | ${q.avgPct} |`).join('\n');
   const grp=(arr)=>(arr||[]).map(g=>`- ${g.name}: ${g.avgPct}%`).join('\n');
+  const clsTxt=(analytics.classes||[]).length>1?'\n\n## '+({ar:'مقارنة بين الصفوف',he:'השוואה בין הכיתות',en:'Class comparison'}[lang]||'')+'\n'+
+    analytics.classes.map(c=>`- ${c.name}: n=${c.n}, avg=${c.average} | `+B.map((b,i)=>`${b.name}: ${c.counts[i]}`).join(', ')).join('\n'):'';
   const head={
     ar:`أنت مستشار تربوي خبير في تحليل نتائج المسوحات الصفية. هذه نتائج مسح صفي في ${subjectName} للصف ${teacher.grade||''} (عدد الطلاب: ${n}، المعدل العام: ${analytics.average.toFixed(1)}).`,
     he:`אתה יועץ פדגוגי מומחה לניתוח מבדקים כיתתיים. אלה תוצאות מבדק ב${subjectName} לכיתה ${teacher.grade||''} (מספר תלמידים: ${n}, ממוצע: ${analytics.average.toFixed(1)}).`,
@@ -1407,7 +1615,7 @@ Use clear headings and tables, concise professional language.`]}[lang]||null;
   return `${head}
 
 ## ${L[0]}
-${dist}
+${dist}${clsTxt}
 
 ## ${L[1]}
 ${grp(analytics.byBloom)}
@@ -1779,6 +1987,7 @@ const App=()=>{
   const [compareAna,setCompareAna]=useState(null);
   const [bands,setBands]=useState(()=>presetBands('ar',4));
   const [nStudents,setNStudents]=useState(35);
+  const [classes,setClasses]=useState([]);
   const [busy,setBusy]=useState(false);
   const [excelMade,setExcelMade]=useState(false);
 
@@ -1806,6 +2015,7 @@ const App=()=>{
     const db=(d.bands&&!validateBands(d.bands))?d.bands:presetBands(d.lang||'ar',4);
     setBands(db);
     if(d.nStudents) setNStudents(d.nStudents);
+    if(Array.isArray(d.classes)) setClasses(d.classes);
     if(d.analytics) setAnalytics(normalizeAnalytics(d.analytics,db));
     if(d.plan)      setPlan(d.plan);
     setShowDraftPrompt(false);
@@ -1819,14 +2029,14 @@ const App=()=>{
     setSubject(null); setPhase(0);
     setTableRaw(''); setParsedQ([]); setExcelMade(false);
     setGradesRaw(''); setAnalytics(null);
-    setBands(presetBands(lang||'ar',4)); setNStudents(35);
+    setBands(presetBands(lang||'ar',4)); setNStudents(35); setClasses([]);
     setPlan({resources:'',period:'',hours:'',assessment:'',reEvalDate:''});
     setShowDraftPrompt(false);
     setDraftData(null);
   };
 
   const handleSave=()=>{
-    sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan,bands,nStudents});
+    sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan,bands,nStudents,classes});
     setSavedMsg(true);setTimeout(()=>setSavedMsg(false),2000);
   };
 
@@ -1895,8 +2105,10 @@ const App=()=>{
 
   // keep the draft in sync whenever results or ranges change (avoids saving stale state)
   useEffect(()=>{
-    if(lang&&teacher.name) sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan,bands,nStudents});
-  },[analytics,bands,nStudents]);
+    if(lang&&teacher.name) sd({lang,subject,phase,teacher,tableRaw,parsedQ,gradesRaw,analytics,plan,bands,nStudents,classes});
+  },[analytics,bands,nStudents,classes]);
+
+  const classList=classes.length?classes:defaultClassNames(lang||'ar',1,teacher.grade);
 
   const generateExcel=async()=>{
     const data=parseExamReply(tableRaw);
@@ -1910,12 +2122,14 @@ const App=()=>{
     }
     const be=validateBands(bands);
     if(be){setModalMsg(t.bandErr[be]);return;}
+    const ce=validateClasses(classList);
+    if(ce){setModalMsg(t[ce]);return;}
     if(typeof ExcelJS==='undefined'){setModalMsg(t.excelLibErr);return;}
     setParsedQ(data);
     setBusy(true);
     try{
       const wb=await buildScreeningWorkbook(ExcelJS,{questions:data,bands,lang:lang||'ar',teacher,
-        subjectName:t.subjects[subject]||subject||'',nStudents});
+        subjectName:t.subjects[subject]||subject||'',nStudents,classes:classList.map(c=>String(c).trim())});
       setExcelMade(true);
       await downloadWorkbook(wb,`ClassScan_${(teacher.grade||'class').replace(/[\\/:*?"<>|]/g,'_')}.xlsx`);
       const totalMax=data.reduce((a,q)=>a+q.max,0);
@@ -2155,7 +2369,8 @@ const App=()=>{
               </div>
               {parsedQ.length>0&&tableRaw&&<div style={{color:'#15803d',fontWeight:700,fontSize:'.9rem'}}>{t.parsedOk.replace('%1',parsedQ.length).replace('%2',parsedQ.reduce((a,q)=>a+q.max,0))}</div>}
               {parsedQ.length>0&&<TablePreview data={parsedQ} t={t} lang={lang}/>}
-              <BandEditor bands={bands} setBands={setBands} lang={lang||'ar'} t={t} nStudents={nStudents} setNStudents={setNStudents}/>
+              <ClassEditor classes={classList} setClasses={setClasses} lang={lang||'ar'} t={t} grade={teacher.grade} nStudents={nStudents} setNStudents={setNStudents}/>
+              <BandEditor bands={bands} setBands={setBands} lang={lang||'ar'} t={t}/>
               <button onClick={generateExcel} disabled={busy} className="glow-teal w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold text-lg py-4 rounded-2xl cursor-pointer" style={{opacity:busy?.6:1}}>
                 {busy?`⏳ ${t.excelBuilding}`:`📊 ${t.generateExcel}`}
               </button>
@@ -2197,7 +2412,7 @@ const App=()=>{
                       </thead>
                       <tbody className="divide-y">
                         {analytics.bands.map((b,i)=>(
-                          <tr key={i} style={{background:'#'+bandLight(analytics.bands,i)}}>
+                          <tr key={i} style={{background:'#'+bandSoft(analytics.bands,i)}}>
                             <td className="py-2 font-bold" style={{color:bandColor(analytics.bands,i)}}>{b.name}<div style={{fontSize:'.72rem',fontWeight:600,opacity:.8}}>{bandRangeLabel(analytics.bands,i)}</div></td>
                             <td className="py-2 font-bold">{analytics.counts[i]}</td>
                             <td className="py-2 font-semibold" style={{color:bandColor(analytics.bands,i)}}>{analytics.totalStudents?((analytics.counts[i]/analytics.totalStudents)*100).toFixed(1):0}%</td>
@@ -2331,7 +2546,7 @@ const App=()=>{
               )}
             </div>
           )}
-          <div className="no-print" style={{marginTop:"40px",paddingTop:"16px",borderTop:"1px solid #f1f5f9",textAlign:"center",fontSize:".8rem",color:"#9ca3af"}}>{t.mainTitle} — v4.0</div>
+          <div className="no-print" style={{marginTop:"40px",paddingTop:"16px",borderTop:"1px solid #f1f5f9",textAlign:"center",fontSize:".8rem",color:"#9ca3af"}}>{t.mainTitle} — v5.0</div>
         </div>
       </div>
     </div>
@@ -2343,4 +2558,4 @@ const root=ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App/>);
 </script>
 </body>
-</html>
+</html>ر
