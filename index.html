@@ -559,15 +559,30 @@ const BAND_PRESETS = {
     6:[['Very weak',0],['Weak',40],['Low average',55],['Average',65],['Good',75],['Excellent',90]]
   }
 };
-/* a band list is [{name,min}], and the last band also carries max (the top of the scale) */
+/* a band list is [{name,min,max}]: both bounds are inclusive and shown to the teacher (e.g. 55 – 64).
+   Classification uses the lower bounds only, so a score that falls between two ranges (e.g. 64.5) counts in the lower one. */
 function presetBands(lang,n){
   const p=(BAND_PRESETS[lang]||BAND_PRESETS.ar)[n]||BAND_PRESETS.ar[4];
-  const b=p.map(([name,min])=>({name,min}));
-  b[b.length-1].max=100;
-  return b;
+  return p.map(([name,min],i)=>({name,min,max:i<p.length-1?p[i+1][1]-1:100}));
 }
+/* older drafts/files stored only lower bounds: derive the upper bound of each range */
+function normalizeBands(bands){
+  if(!Array.isArray(bands)) return bands;
+  return bands.map((b,i)=>{
+    if(b.max!==undefined&&b.max!==null&&b.max!=='') return {...b};
+    const next=bands[i+1];
+    return {...b,max:next?Number(next.min)-1:100};
+  });
+}
+/* the step used to guess the neighbouring bound: 1 for whole numbers, 0.1 otherwise */
+function boundStep(v){return Number.isInteger(Number(v))?1:0.1;}
+function roundB(v){return Math.round(Number(v)*10)/10;}
 function bandTop(bands){const m=bands[bands.length-1].max;return (m===undefined||m===null||m==='')?100:Number(m);}
-function bandUpper(bands,i){return i<bands.length-1?Number(bands[i+1].min):bandTop(bands);}
+function bandUpper(bands,i){
+  const m=bands[i].max;
+  if(m!==undefined&&m!==null&&m!=='') return Number(m);
+  return i<bands.length-1?Number(bands[i+1].min)-1:100;
+}
 /* scores below the lowest bound count in the first band, scores above the top in the last band */
 function bandIndex(score,bands){
   let idx=0;
@@ -577,19 +592,24 @@ function bandIndex(score,bands){
 /* returns null if valid, otherwise an error key */
 function validateBands(bands){
   if(!Array.isArray(bands)||bands.length<4||bands.length>6) return 'count';
+  const bad=(v)=>v===''||v===null||v===undefined||isNaN(Number(v))||Number(v)<0||Number(v)>100;
   for(let i=0;i<bands.length;i++){
     const b=bands[i];
     if(!String(b.name||'').trim()) return 'name';
-    const m=Number(b.min);
-    if(b.min===''||b.min===null||isNaN(m)||m<0||m>=100) return 'range';
-    if(i>0&&m<=Number(bands[i-1].min)) return 'order';
-  }
-  const last=bands[bands.length-1], top=last.max;
-  if(top!==undefined&&top!==null){
-    const t=Number(top);
-    if(top===''||isNaN(t)||t>100||t<=Number(last.min)) return 'top';
+    if(bad(b.min)||bad(bandUpper(bands,i))) return 'range';
+    if(bandUpper(bands,i)<Number(b.min)) return 'span';
+    if(i>0&&Number(b.min)<=bandUpper(bands,i-1)) return 'order';
   }
   return null;
+}
+/* indexes i where a gap is left between range i and range i+1 (e.g. 54 → 60) */
+function bandGaps(bands){
+  const g=[];
+  for(let i=0;i<bands.length-1;i++){
+    const up=bandUpper(bands,i), nx=Number(bands[i+1].min);
+    if(nx-up>boundStep(up)+1e-9) g.push(i);
+  }
+  return g;
 }
 function bandRangeLabel(bands,i){return `${Number(bands[i].min)} – ${bandUpper(bands,i)}`;}
 function buildDist(scores,bands){
@@ -632,8 +652,8 @@ const XL = {
     byBloom:'التحصيل حسب مهارات بلوم (%)', byTopic:'التحصيل حسب موضوع السؤال (%)', bySection:'التحصيل حسب القسم (%)', qCount:'عدد الأسئلة', maxSum:'مجموع العلامات',
     weakest:'أضعف 3 أسئلة (جميع الصفوف)', strongest:'أقوى 3 أسئلة (جميع الصفوف)', question:'السؤال', avgPct:'معدل التحصيل %',
     bandsTitle:'مجالات توزيع العلامات',
-    bandsNote:'يمكنك تعديل أسماء المجالات وحدودها هنا، بما في ذلك الحد الأدنى للمجال الأول والحد الأعلى للمجال الأخير. تتحدث كل الحسابات والألوان تلقائيًا. العلامة الأقل من الحد الأدنى تُحسب ضمن المجال الأول، والأعلى من الحد الأعلى ضمن المجال الأخير.',
-    colorCol:'اللون', errTitle:'قيمة غير صحيحة', errMsg:'العلامة يجب أن تكون بين 0 والعلامة القصوى للسؤال.', bandErrMsg:'الحدود يجب أن تكون تصاعدية بين 0 و 100.',
+    bandsNote:'يمكنك تعديل اسم كل مجال وحدّيه (من – إلى) هنا، وتتحدث كل الحسابات والألوان تلقائيًا. العلامة التي تقع بين مجالين (مثل 54.5) تُحسب ضمن المجال الأدنى. العلامة الأقل من الحد الأدنى للمجال الأول تُحسب ضمنه، والأعلى من الحد الأعلى للمجال الأخير تُحسب ضمنه.',
+    colorCol:'اللون', errTitle:'قيمة غير صحيحة', errMsg:'العلامة يجب أن تكون بين 0 والعلامة القصوى للسؤال.', bandErrMsg:'الحدود يجب أن تكون تصاعدية بين 0 و 100، والحد الأعلى لكل مجال أصغر من الحد الأدنى للمجال التالي.',
     legend:'مفتاح الألوان:',
     guide:[
       ['كيف تستخدم/ين هذا الملف؟',''],
@@ -661,7 +681,7 @@ const XL = {
     byBloom:'הישגים לפי מיומנויות בלום (%)', byTopic:'הישגים לפי נושא (%)', bySection:'הישגים לפי פרק (%)', qCount:'מספר שאלות', maxSum:'סה״כ ניקוד',
     weakest:'3 השאלות החלשות (כל הכיתות)', strongest:'3 השאלות החזקות (כל הכיתות)', question:'שאלה', avgPct:'ממוצע הישג %',
     bandsTitle:'טווחי התפלגות הציונים',
-    bandsNote:'ניתן לשנות כאן את שמות הטווחים והגבולות שלהם, כולל הגבול התחתון של הטווח הראשון והעליון של האחרון. כל החישובים והצבעים יתעדכנו. ציון מתחת לגבול התחתון נספר בטווח הראשון, ומעל לעליון – בטווח האחרון.',
+    bandsNote:'ניתן לשנות כאן את שם כל טווח ואת שני גבולותיו (מ- – עד); כל החישובים והצבעים יתעדכנו. ציון שנופל בין שני טווחים (למשל 54.5) נספר בטווח הנמוך. ציון מתחת לטווח הראשון נספר בו, ומעל לטווח האחרון – באחרון.',
     colorCol:'צבע', errTitle:'ערך שגוי', errMsg:'הציון חייב להיות בין 0 לניקוד המרבי של השאלה.', bandErrMsg:'הגבולות חייבים להיות בסדר עולה בין 0 ל-100.',
     legend:'מקרא צבעים:',
     guide:[
@@ -690,7 +710,7 @@ const XL = {
     byBloom:'Achievement by Bloom Skill (%)', byTopic:'Achievement by Topic (%)', bySection:'Achievement by Section (%)', qCount:'Questions', maxSum:'Total Points',
     weakest:'3 Weakest Questions (all classes)', strongest:'3 Strongest Questions (all classes)', question:'Question', avgPct:'Achievement %',
     bandsTitle:'Performance Ranges',
-    bandsNote:'Edit range names and bounds here, including the lowest bound of the first range and the top of the last one; everything updates automatically. Scores below the lowest bound count in the first range, scores above the top in the last range.',
+    bandsNote:'Edit each range name and both its bounds (from – to); everything updates automatically. A score between two ranges (e.g. 54.5) counts in the lower range. Scores below the first range count in it, scores above the last range count in the last.',
     colorCol:'Color', errTitle:'Invalid value', errMsg:'Score must be between 0 and the question maximum.', bandErrMsg:'Bounds must increase between 0 and 100.',
     legend:'Color key:',
     guide:[
@@ -768,11 +788,9 @@ async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subj
     wsB.getCell(r,1).value=i+1; style(wsB.getCell(r,1),{bg:GREY,bold:true});
     const cn=wsB.getCell(r,2); cn.value=b.name; style(cn,{bold:true}); cn.protection={locked:false};
     const cm=wsB.getCell(r,3); cm.value=Number(b.min); style(cm,{bold:true,bg:'FFFBEB'}); cm.protection={locked:false};
-    const lo=i===0?0:`C${r-1}+0.01`, hi=i<nb-1?`C${r+1}-0.01`:`D${r}-0.01`;
-    cm.dataValidation=bandDV(lo,hi);
-    const ct=wsB.getCell(r,4);
-    if(i<nb-1){ct.value={formula:`C${r+1}`};style(ct,{color:'475569'});}
-    else{ct.value=bandTop(bands);style(ct,{bold:true,bg:'FFFBEB'});ct.protection={locked:false};ct.dataValidation=bandDV(`C${r}+0.01`,100);}
+    cm.dataValidation=bandDV(i===0?0:`D${r-1}+0.01`,`D${r}`);
+    const ct=wsB.getCell(r,4); ct.value=bandUpper(bands,i); style(ct,{bold:true,bg:'FFFBEB'}); ct.protection={locked:false};
+    ct.dataValidation=bandDV(`C${r}`,i<nb-1?`C${r+1}-0.01`:100);
     const cc=wsB.getCell(r,5); cc.value=''; style(cc,{bg:bandLight(bands,i)});
     wsB.getRow(r).height=24;
   });
@@ -1142,9 +1160,9 @@ async function readScreeningWorkbook(ExcelJS,arrayBuffer){
       const r=M.bandsFirstRow+i;
       b.push({name:cellText(wsB.getCell(r,2).value).trim(),min:cellNum(wsB.getCell(r,3).value)});
     }
-    const top=cellNum(wsB.getCell(M.bandsFirstRow+M.bandCount-1,4).value);
-    b[b.length-1].max=top===null?100:top;
-    if(!validateBands(b)) bands=b;
+    b.forEach((x,i)=>{const v=cellNum(wsB.getCell(M.bandsFirstRow+i,4).value);if(v!==null)x.max=v;});
+    const nb2=normalizeBands(b);
+    if(!validateBands(nb2)) bands=nb2;
   }
   const ws0=sheets[0].ws;
   const questions=[];
@@ -1208,11 +1226,11 @@ const EX={
     bandsTitle:'مجالات توزيع العلامات', bandsSub:'حدد/ي عدد المجالات المعتمدة في مدرستك وأسماءها وحدودها. ستُبنى كل الحسابات والألوان في ملف الإكسل وفي التحليل حسبها.',
     bandsCount:'عدد المجالات', bandName:'اسم المجال', bandMin:'من (الحد الأدنى)', bandTo:'إلى', bandReset:'استعادة القيم المقترحة',
     nStudents:'عدد أسطر الطلاب في ورقة كل صف',
-    bandFrom:'من', bandUpTo:'إلى', bandClampNote:'يمكنك تعديل الحد الأدنى للمجال الأول والحد الأعلى للمجال الأخير. العلامة الأقل من الحد الأدنى تُحسب ضمن المجال الأول، والأعلى من الحد الأعلى ضمن المجال الأخير.',
+    bandFrom:'من', bandUpTo:'إلى', bandClampNote:'حدّد/ي الحدّين لكل مجال. عند كتابة الحد الأعلى لمجال، تقترح المنصة الحد الأدنى للمجال التالي تلقائيًا (والعكس)، ويمكنك تعديله. العلامة التي تقع بين مجالين (مثل 54.5) تُحسب ضمن المجال الأدنى.', bandGapWarn:'تنبيه: توجد فجوة بين «%1» و«%2». العلامات الواقعة فيها ستُحسب ضمن «%1».',
     classesTitle:'الصفوف (الشُّعب) المشمولة', classesSub:'سيحتوي ملف الإكسل على ورقة رصد لكل صف، وورقة إضافية تحلل نتائج جميع الصفوف وتقارن بينها.',
     classesCount:'عدد الصفوف', classNamesLbl:'أسماء الصفوف (تصبح أسماء الأوراق في الملف)', classErrEmpty:'يرجى كتابة اسم لكل صف.', classErrDup:'أسماء الصفوف يجب أن تكون مختلفة.',
     classCmp:'مقارنة بين الصفوف', clsCol:'الصف', nCol:'عدد الطلاب', avgCol:'المعدل',
-    bandErr:{count:'عدد المجالات يجب أن يكون بين 4 و 6.',top:'الحد الأعلى للمجال الأخير يجب أن يكون أكبر من حده الأدنى ولا يتجاوز 100.',name:'يرجى كتابة اسم لكل مجال.',range:'الحدود يجب أن تكون أرقامًا بين 0 و 100.',order:'الحدود الدنيا يجب أن تكون تصاعدية (كل مجال يبدأ بعد السابق).'},
+    bandErr:{count:'عدد المجالات يجب أن يكون بين 4 و 6.',span:'في كل مجال، الحد الأعلى يجب أن يكون أكبر من الحد الأدنى أو مساويًا له.',name:'يرجى كتابة اسم لكل مجال.',range:'الحدود يجب أن تكون أرقامًا بين 0 و 100.',order:'المجالات متداخلة: الحد الأدنى لكل مجال يجب أن يكون أكبر من الحد الأعلى للمجال الذي قبله.'},
     excelBuilding:'جارٍ بناء الملف...', excelLibErr:'تعذّر تحميل مكتبة الإكسل. تأكد/ي من الاتصال بالإنترنت وأعد/ي تحميل الصفحة.',
     totalWarn:'تنبيه: مجموع العلامات القصوى للأسئلة هو %1 وليس 100. سيحسب الملف النسبة المئوية تلقائيًا.',
     uploadTitle:'الطريقة الموصى بها: ارفع/ي ملف الإكسل بعد تعبئته', uploadBtn:'📂 اختيار ملف الإكسل المعبّأ', uploadHint:'تقرأ المنصة علامات كل طالب في كل سؤال وتُعدّ تحليلًا كاملًا.',
@@ -1232,11 +1250,11 @@ const EX={
     bandsTitle:'טווחי התפלגות הציונים', bandsSub:'בחרו את מספר הטווחים הנהוג בבית הספר, את שמותיהם ואת הסף התחתון של כל טווח. כל החישובים והצבעים בקובץ ובניתוח ייבנו לפיהם.',
     bandsCount:'מספר טווחים', bandName:'שם הטווח', bandMin:'מ- (סף תחתון)', bandTo:'עד', bandReset:'שחזור ערכים מוצעים',
     nStudents:'מספר שורות תלמידים בגיליון של כל כיתה',
-    bandFrom:'מ-', bandUpTo:'עד', bandClampNote:'ניתן לשנות את הגבול התחתון של הטווח הראשון ואת העליון של האחרון. ציון מתחת לגבול התחתון נספר בטווח הראשון, ומעל לעליון – בטווח האחרון.',
+    bandFrom:'מ-', bandUpTo:'עד', bandClampNote:'הגדירו את שני הגבולות של כל טווח. כשמזינים את הגבול העליון של טווח, הפלטפורמה מציעה את הגבול התחתון של הבא (ולהפך), וניתן לשנותו. ציון שנופל בין שני טווחים (למשל 54.5) נספר בטווח הנמוך.', bandGapWarn:'שימו לב: יש פער בין «%1» ל«%2». ציונים בפער ייספרו ב«%1».',
     classesTitle:'הכיתות הנכללות', classesSub:'קובץ האקסל יכלול גיליון הזנה לכל כיתה וגיליון נוסף המנתח ומשווה את תוצאות כל הכיתות.',
     classesCount:'מספר כיתות', classNamesLbl:'שמות הכיתות (שמות הגיליונות בקובץ)', classErrEmpty:'יש לתת שם לכל כיתה.', classErrDup:'שמות הכיתות חייבים להיות שונים.',
     classCmp:'השוואה בין הכיתות', clsCol:'כיתה', nCol:'מספר תלמידים', avgCol:'ממוצע',
-    bandErr:{count:'מספר הטווחים חייב להיות בין 4 ל-6.',top:'הגבול העליון של הטווח האחרון חייב להיות גדול מהתחתון ולא יותר מ-100.',name:'יש לתת שם לכל טווח.',range:'הגבולות חייבים להיות מספרים בין 0 ל-100.',order:'הספים חייבים להיות בסדר עולה.'},
+    bandErr:{count:'מספר הטווחים חייב להיות בין 4 ל-6.',span:'בכל טווח הגבול העליון חייב להיות גדול מהתחתון או שווה לו.',name:'יש לתת שם לכל טווח.',range:'הגבולות חייבים להיות מספרים בין 0 ל-100.',order:'הטווחים חופפים: הגבול התחתון של כל טווח חייב להיות גדול מהעליון של הקודם.'},
     excelBuilding:'בונה את הקובץ...', excelLibErr:'לא ניתן לטעון את ספריית האקסל. בדקו את החיבור לאינטרנט ורעננו את הדף.',
     totalWarn:'שימו לב: סך הניקוד המרבי הוא %1 ולא 100. הקובץ יחשב את האחוז אוטומטית.',
     uploadTitle:'מומלץ: העלו את קובץ האקסל לאחר מילוי', uploadBtn:'📂 בחירת קובץ אקסל ממולא', uploadHint:'הפלטפורמה קוראת את ציון כל תלמיד בכל שאלה ומכינה ניתוח מלא.',
@@ -1256,11 +1274,11 @@ const EX={
     bandsTitle:'Performance Ranges', bandsSub:'Choose how many ranges your school uses, their names and lower bounds. All Excel calculations, colors and the analysis will follow them.',
     bandsCount:'Number of ranges', bandName:'Range name', bandMin:'From (lower bound)', bandTo:'To', bandReset:'Restore suggested values',
     nStudents:'Student rows per class sheet',
-    bandFrom:'From', bandUpTo:'To', bandClampNote:'You can change the lowest bound of the first range and the top of the last one. Scores below the lowest bound count in the first range; scores above the top in the last range.',
+    bandFrom:'From', bandUpTo:'To', bandClampNote:'Set both bounds of every range. When you type a range\'s upper bound, the next range\'s lower bound is suggested automatically (and vice versa); you can change it. A score between two ranges (e.g. 54.5) counts in the lower range.', bandGapWarn:'Note: there is a gap between "%1" and "%2". Scores in it will count in "%1".',
     classesTitle:'Classes included', classesSub:'The Excel file will have an entry sheet per class plus a sheet that analyzes and compares all classes.',
     classesCount:'Number of classes', classNamesLbl:'Class names (become sheet names)', classErrEmpty:'Please name every class.', classErrDup:'Class names must be different.',
     classCmp:'Class comparison', clsCol:'Class', nCol:'Students', avgCol:'Average',
-    bandErr:{count:'Use 4 to 6 ranges.',top:'The top of the last range must be above its lower bound and at most 100.',name:'Please name every range.',range:'Bounds must be numbers between 0 and 100.',order:'Lower bounds must increase from range to range.'},
+    bandErr:{count:'Use 4 to 6 ranges.',span:'In each range the upper bound must be at least the lower bound.',name:'Please name every range.',range:'Bounds must be numbers between 0 and 100.',order:'Ranges overlap: each range must start above the previous range\'s upper bound.'},
     excelBuilding:'Building the file...', excelLibErr:'Could not load the Excel library. Check your connection and reload the page.',
     totalWarn:'Note: question maximums add up to %1, not 100. The file converts to percent automatically.',
     uploadTitle:'Recommended: upload the filled Excel file', uploadBtn:'📂 Choose the filled Excel file', uploadHint:'The platform reads every student\'s score per question and builds a full analysis.',
@@ -1274,7 +1292,8 @@ const EX={
 /* old drafts stored distribution as fixed keys — rebuild counts with the current ranges */
 function normalizeAnalytics(a,bands){
   if(!a) return a;
-  const b=(a.bands&&!validateBands(a.bands))?a.bands:bands;
+  const ab=normalizeBands(a.bands);
+  const b=(ab&&!validateBands(ab))?ab:bands;
   return {...a,bands:b,counts:buildDist(a.scores||[],b)};
 }
 /* split ranges into the three intervention groups used by the plan */
@@ -1285,13 +1304,29 @@ function planGroups(bands){
 
 const BandEditor=({bands,setBands,lang,t})=>{
   const err=validateBands(bands);
+  const gaps=err?[]:bandGaps(bands);
   const n=bands.length;
+  const [flash,setFlash]=useState(null);   // the bound that was just guessed automatically, e.g. "min-2"
   const setCount=(k)=>setBands(presetBands(lang,k));
   const num=(v)=>v===''?'':Number(v);
-  const upd=(i,k,v)=>setBands(bands.map((b,j)=>j===i?{...b,[k]:k==='name'?v:num(v)}:b));
-  const inp={padding:'8px 10px',borderRadius:'10px',border:'2px solid #e5e7eb',outline:'none',fontSize:'.95rem',fontFamily:"'Cairo',sans-serif",width:'100%'};
-  const edge={...inp,borderColor:'#a5b4fc',background:'#eef2ff',textAlign:'center',fontWeight:800};
-  const cols='16px 1fr 96px 96px';
+  const setName=(i,v)=>setBands(bands.map((b,j)=>j===i?{...b,name:v}:b));
+  /* editing an upper bound suggests the next lower bound, and vice versa */
+  const setBound=(i,key,v)=>{
+    const val=num(v);
+    const next=bands.map(b=>({...b}));
+    next[i][key]=val;
+    let guessed=null;
+    if(val!==''&&!isNaN(val)){
+      if(key==='max'&&i<n-1){next[i+1].min=roundB(val+boundStep(val));guessed=`min-${i+1}`;}
+      if(key==='min'&&i>0){next[i-1].max=roundB(val-boundStep(val));guessed=`max-${i-1}`;}
+    }
+    setBands(next);
+    if(guessed){setFlash(guessed);setTimeout(()=>setFlash(f=>f===guessed?null:f),1400);}
+  };
+  const inp={padding:'8px 10px',borderRadius:'10px',border:'2px solid #e5e7eb',outline:'none',fontSize:'.95rem',fontFamily:"'Cairo',sans-serif",width:'100%',transition:'background .4s, border-color .4s'};
+  const boundStyle=(id)=>({...inp,textAlign:'center',fontWeight:700,
+    ...(flash===id?{background:'#dcfce7',borderColor:'#22c55e'}:{background:'white'})});
+  const cols='16px 1fr 88px 14px 88px';
   return(
     <div className="p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/40 fade-in">
       <h3 style={{fontSize:'1.15rem',fontWeight:800,color:'#1e3a5f',marginBottom:'4px'}}>🎯 {t.bandsTitle}</h3>
@@ -1306,20 +1341,20 @@ const BandEditor=({bands,setBands,lang,t})=>{
       </div>
       <div style={{display:'grid',gap:'8px'}}>
         <div style={{display:'grid',gridTemplateColumns:cols,gap:'8px',fontSize:'.78rem',fontWeight:700,color:'#64748b',textAlign:'center'}}>
-          <span/><span style={{textAlign:'start'}}>{t.bandName}</span><span>{t.bandFrom}</span><span>{t.bandUpTo}</span>
+          <span/><span style={{textAlign:'start'}}>{t.bandName}</span><span>{t.bandFrom}</span><span/><span>{t.bandUpTo}</span>
         </div>
         {bands.map((b,i)=>(
           <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:'8px',alignItems:'center'}}>
             <span style={{width:'16px',height:'16px',borderRadius:'4px',background:'#'+bandLight(bands,i),border:'1px solid rgba(0,0,0,.12)'}}/>
-            <input value={b.name} onChange={e=>upd(i,'name',e.target.value)} style={inp}/>
-            <input type="number" min="0" max="99" step="0.5" value={b.min} onChange={e=>upd(i,'min',e.target.value)} style={i===0?edge:{...inp,textAlign:'center'}}/>
-            {i<n-1
-              ? <span style={{textAlign:'center',fontWeight:700,color:'#475569',fontSize:'.9rem'}}>{bands[i+1].min}</span>
-              : <input type="number" min="1" max="100" step="0.5" value={b.max===undefined?100:b.max} onChange={e=>upd(i,'max',e.target.value)} style={edge}/>}
+            <input value={b.name} onChange={e=>setName(i,e.target.value)} style={inp}/>
+            <input type="number" min="0" max="100" step="any" value={b.min} onChange={e=>setBound(i,'min',e.target.value)} style={boundStyle(`min-${i}`)} aria-label={`${b.name} ${t.bandFrom}`}/>
+            <span style={{textAlign:'center',color:'#94a3b8',fontWeight:700}}>–</span>
+            <input type="number" min="0" max="100" step="any" value={b.max===undefined?bandUpper(bands,i):b.max} onChange={e=>setBound(i,'max',e.target.value)} style={boundStyle(`max-${i}`)} aria-label={`${b.name} ${t.bandUpTo}`}/>
           </div>
         ))}
       </div>
       <p style={{fontSize:'.78rem',color:'#6366f1',marginTop:'10px'}}>ℹ️ {t.bandClampNote}</p>
+      {gaps.map(i=><div key={i} style={{marginTop:'6px',color:'#b45309',fontWeight:700,fontSize:'.85rem'}}>⚠️ {t.bandGapWarn.split('%1').join(bands[i].name).replace('%2',bands[i+1].name)}</div>)}
       {err&&<div style={{marginTop:'8px',color:'#b91c1c',fontWeight:700,fontSize:'.88rem'}}>⚠️ {t.bandErr[err]}</div>}
     </div>
   );
@@ -2012,7 +2047,8 @@ const App=()=>{
     if(d.parsedQ)   setParsedQ(d.parsedQ);
     if(d.parsedQ&&d.parsedQ.length) setExcelMade(true);
     if(d.gradesRaw) setGradesRaw(d.gradesRaw);
-    const db=(d.bands&&!validateBands(d.bands))?d.bands:presetBands(d.lang||'ar',4);
+    const nbd=normalizeBands(d.bands);
+    const db=(nbd&&!validateBands(nbd))?nbd:presetBands(d.lang||'ar',4);
     setBands(db);
     if(d.nStudents) setNStudents(d.nStudents);
     if(Array.isArray(d.classes)) setClasses(d.classes);
@@ -2558,4 +2594,4 @@ const root=ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App/>);
 </script>
 </body>
-</html>ر
+</html>
