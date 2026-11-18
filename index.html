@@ -50,7 +50,14 @@ body{background:linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%);min-
 .sh-text{position:relative;z-index:1;text-align:center;}
 .sh-title{font-size:1.55rem;font-weight:900;color:#fff;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.3);}
 .sh-sub{font-size:.9rem;font-weight:700;color:#fbbf24;margin-top:6px;}
-.mini-header{background:linear-gradient(135deg,#1e3a5f,#0f2749);padding:14px 28px;display:flex;align-items:center;gap:14px;margin-bottom:28px;}
+.mini-header{background:linear-gradient(135deg,#1e3a5f,#0f2749);padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:28px;}
+.lang-switch{display:inline-flex;gap:4px;padding:4px;border-radius:50px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(8px);position:relative;z-index:2;}
+.lang-switch.ls-float{position:absolute;top:16px;inset-inline-end:16px;}
+.lang-switch.ls-top{margin:0 auto 14px;}
+.lang-switch.ls-end{margin-inline-start:auto;}
+.ls-btn{border:none;background:transparent;color:rgba(255,255,255,.85);font-weight:700;font-size:.82rem;padding:6px 14px;border-radius:50px;cursor:pointer;font-family:'Cairo',sans-serif;transition:all .2s;}
+.ls-btn:hover{background:rgba(255,255,255,.15);}
+.ls-btn.on{background:#fbbf24;color:#0f2749;}
 .mh-logo{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1.5px solid rgba(255,255,255,.25);flex-shrink:0;}
 .mh-title{font-size:1.05rem;font-weight:900;color:#fff;line-height:1.15;}
 .mh-sub{font-size:.8rem;font-weight:700;color:#fbbf24;}
@@ -108,6 +115,8 @@ const UI = {
     mainSub:   "\u0627\u0644\u0645\u0646\u0635\u0629 \u0627\u0644\u0630\u0643\u064a\u0629 \u0644\u0644\u0645\u0633\u0648\u062d\u0627\u062a \u0627\u0644\u0635\u0641\u064a\u0629",
     pickLang:  "\u0627\u062e\u062a\u0631 \u0644\u063a\u0629 \u0627\u0644\u0648\u0627\u062c\u0647\u0629",
     splashLabel: "\u0627\u062e\u062a\u0631 \u0644\u063a\u062a\u0643",
+    splashBadge: "مركزة تقييم — منى مصطفى",
+    splashFooter:"منصة ومضات ذكية",
     pickSubject:"\u0627\u062e\u062a\u0631 \u0627\u0644\u0645\u0627\u062f\u0629 \u0627\u0644\u062f\u0631\u0627\u0633\u064a\u0629",
     subjectHint:"\u0633\u064a\u062a\u0645 \u062a\u062e\u0635\u064a\u0635 \u0627\u0644\u0628\u0631\u0648\u0645\u0628\u062a \u0648\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u062d\u0633\u0628 \u0627\u0644\u0645\u0627\u062f\u0629",
     back:"\u0631\u062c\u0648\u0639", save:"\u062d\u0641\u0638 \u0627\u0644\u0645\u0633\u0648\u062f\u0629", saved:"\u062a\u0645 \u0627\u0644\u062d\u0641\u0638",
@@ -193,10 +202,12 @@ const UI = {
     badTable:"\u064a\u0631\u062c\u0649 \u0644\u0635\u0642 \u0627\u0644\u062c\u062f\u0648\u0644 \u0628\u062a\u0646\u0633\u064a\u0642 Markdown \u0635\u062d\u064a\u062d."
   },
   he: {
-    mainTitle: "\u05d1\u05e8\u05e7\u05d9\u05dd \u05d7\u05db\u05de\u05d9\u05dd \u05e2\u05dd \u05de\u05e0\u05d0 \u05de\u05d5\u05e1\u05d8\u05e4\u05d0",
+    mainTitle: "\u05d1\u05e8\u05e7\u05d9\u05dd \u05d7\u05db\u05de\u05d9\u05dd \u05e2\u05dd \u05de\u05d5\u05e0\u05d0 \u05de\u05d5\u05e1\u05d8\u05e4\u05d0",
     mainSub:   "\u05d4\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4 \u05d4\u05d7\u05db\u05de\u05d4 \u05dc\u05de\u05d9\u05e4\u05d5\u05d9 \u05db\u05d9\u05ea\u05ea\u05d9",
     pickLang:  "\u05d1\u05d7\u05e8 \u05e9\u05e4\u05ea \u05de\u05de\u05e9\u05e7",
     splashLabel:"\u05d1\u05d7\u05e8 \u05e9\u05e4\u05ea\u05da",
+    splashBadge: "רכזת הערכה — מונא מוסטפא",
+    splashFooter:"פלטפורמת ברקים חכמים",
     pickSubject:"\u05d1\u05d7\u05e8 \u05de\u05e7\u05e6\u05d5\u05e2",
     subjectHint:"\u05d4\u05d4\u05e0\u05d7\u05d9\u05d5\u05ea \u05d5\u05d4\u05d3\u05d5\u05d7\u05d5\u05ea \u05d9\u05d5\u05ea\u05d0\u05de\u05d5 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05dc\u05e4\u05d9 \u05d4\u05de\u05e7\u05e6\u05d5\u05e2",
     back:"\u05d7\u05d6\u05e8\u05d4", save:"\u05e9\u05de\u05d5\u05e8 \u05d8\u05d9\u05d5\u05d8\u05d4", saved:"\u05e0\u05e9\u05de\u05e8",
@@ -285,6 +296,8 @@ const UI = {
     mainSub:   "The Smart Platform for Classroom Screening",
     pickLang:  "Choose Interface Language",
     splashLabel:"Choose your language",
+    splashBadge: "Assessment Coordinator — Mona Mustafa",
+    splashFooter:"Smart Flashes Platform",
     pickSubject:"Choose a Subject",
     subjectHint:"Prompts and reports will be automatically customized for the selected subject",
     back:"Back", save:"Save Draft", saved:"Saved",
@@ -1741,9 +1754,20 @@ const sd=(o)=>{try{localStorage.setItem(KEY,JSON.stringify(o));}catch{}};
 
 /* ── SUB-COMPONENTS ── */
 
-const SiteHeader=({t})=>(
+const LANGS=[['ar','العربية'],['he','עברית'],['en','English']];
+const LangSwitch=({lang,onChange,pos})=>(
+  <div className={'lang-switch no-print '+(pos||'')} role="group" aria-label="Language / اللغة / שפה">
+    {LANGS.map(([l,lbl])=>(
+      <button key={l} type="button" lang={l} aria-pressed={lang===l}
+        className={'ls-btn'+(lang===l?' on':'')} onClick={()=>onChange(l)}>{lbl}</button>
+    ))}
+  </div>
+);
+
+const SiteHeader=({t,lang,onLang})=>(
   <div className="site-header">
     <div className="sh-text">
+      {onLang&&<div style={{textAlign:'center'}}><LangSwitch lang={lang} onChange={onLang} pos="ls-top"/></div>}
       <img src={LOGO} alt="logo" className="sh-logo" onError={e=>e.target.style.display='none'} style={{margin:'0 auto 10px'}}/>
       <div className="sh-title">{t.mainTitle}</div>
       <div className="sh-sub">{t.mainSub}</div>
@@ -1751,13 +1775,14 @@ const SiteHeader=({t})=>(
   </div>
 );
 
-const MiniHeader=({t})=>(
+const MiniHeader=({t,lang,onLang})=>(
   <div className="mini-header no-print">
     <img src={LOGO} alt="logo" className="mh-logo" onError={e=>e.target.style.display='none'}/>
     <div>
       <div className="mh-title">{t.mainTitle}</div>
       <div className="mh-sub">{t.mainSub}</div>
     </div>
+    {onLang&&<LangSwitch lang={lang} onChange={onLang} pos="ls-end"/>}
   </div>
 );
 
@@ -2004,6 +2029,8 @@ const DraftPrompt=({t,draft,onContinue,onFresh,dir})=>{
 const App=()=>{
   // Draft is NEVER loaded automatically — only when user explicitly chooses
   const [lang,setLang]=useState(null);
+  const UIKEY='wamadhat_ui_lang';
+  const [splashLang,setSplashLang]=useState(()=>{try{const v=localStorage.getItem(UIKEY);return UI[v]?v:'ar';}catch{return 'ar';}});
   const [modalMsg,setModalMsg]=useState(null);
   const [showDraftPrompt,setShowDraftPrompt]=useState(false);
   const [draftData,setDraftData]=useState(null);
@@ -2033,6 +2060,32 @@ const App=()=>{
 
   const t={...UI[lang||'ar'],...(EX[lang||'ar']||EX.ar)};
   const dir=(lang==='ar'||lang==='he')?'rtl':'ltr';
+  const sT=UI[splashLang]||UI.ar;
+  const sDir=splashLang==='en'?'ltr':'rtl';
+
+  // remember the chosen language and keep the page's lang/dir/title in step with it
+  useEffect(()=>{
+    const cur=lang||splashLang;
+    try{localStorage.setItem(UIKEY,cur);}catch{}
+    if(lang&&lang!==splashLang) setSplashLang(lang);
+    document.documentElement.lang=cur;
+    document.documentElement.dir=cur==='en'?'ltr':'rtl';
+    document.title=(UI[cur]||UI.ar).mainTitle;
+  },[lang,splashLang]);
+
+  // switch the language at any step without losing the teacher's work
+  const changeLang=(l)=>{
+    if(!UI[l]||l===lang) return;
+    setBands(b=>{
+      // band names that are still the untouched preset follow the new language
+      const p=presetBands(lang||'ar',b.length);
+      const untouched=p.length===b.length&&b.every((x,i)=>x.name===p[i].name);
+      if(!untouched) return b;
+      const np=presetBands(l,b.length);
+      return b.map((x,i)=>({...x,name:np[i].name}));
+    });
+    setLang(l);
+  };
   const sm=subject?SUBJECT_META[subject]:null;
 
   // ── Draft handlers ──
@@ -2230,8 +2283,9 @@ const App=()=>{
       background:'linear-gradient(145deg,#0f2749 0%,#1e3a5f 40%,#1a4060 70%,#0f2749 100%)',
       display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
       padding:'32px 20px',
-      position:'relative',overflow:'hidden'
-    }}>
+      position:'relative',overflow:'hidden',paddingTop:'80px'
+    }} dir={sDir}>
+      <LangSwitch lang={splashLang} onChange={setSplashLang} pos="ls-float"/>
       {/* Decorative blobs */}
       <div style={{position:'absolute',top:'-80px',right:'-80px',width:'400px',height:'400px',borderRadius:'50%',background:'radial-gradient(circle,rgba(249,115,22,.18),transparent 70%)',pointerEvents:'none'}}/>
       <div style={{position:'absolute',bottom:'-100px',left:'-100px',width:'500px',height:'500px',borderRadius:'50%',background:'radial-gradient(circle,rgba(59,130,246,.15),transparent 70%)',pointerEvents:'none'}}/>
@@ -2250,10 +2304,10 @@ const App=()=>{
           <img src={LOGO} alt="logo" style={{width:'90px',height:'90px',borderRadius:'20px',objectFit:'cover'}} onError={e=>e.target.style.display='none'}/>
         </div>
         <h1 style={{fontSize:'clamp(1.6rem,4vw,2.4rem)',fontWeight:900,color:'#fff',textShadow:'0 2px 16px rgba(0,0,0,.4)',marginBottom:'10px',lineHeight:1.2}}>
-          {UI.ar.mainTitle}
+          {sT.mainTitle}
         </h1>
         <p style={{fontSize:'1rem',fontWeight:700,color:'#fbbf24',letterSpacing:'.5px'}}>
-          {UI.ar.mainSub}
+          {sT.mainSub}
         </p>
         <div style={{
           display:'inline-block',marginTop:'18px',
@@ -2261,7 +2315,7 @@ const App=()=>{
           background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.2)',
           color:'rgba(255,255,255,.8)',fontSize:'.85rem',fontWeight:600
         }}>
-          🎓 مركزة تقييم — منى مصطفى
+          🎓 {sT.splashBadge}
         </div>
       </div>
 
@@ -2288,6 +2342,7 @@ const App=()=>{
           ].map(([l,lbl,bg,flag,sub])=>(
             <button key={l} onClick={()=>{
               const saved=ld();
+              setSplashLang(l);
               setLang(l);
               setBands(presetBands(l,4));
               if(saved&&saved.teacher&&saved.teacher.name){
@@ -2317,7 +2372,7 @@ const App=()=>{
 
       {/* Bottom decorative line */}
       <div style={{marginTop:'40px',color:'rgba(255,255,255,.3)',fontSize:'.78rem',fontWeight:600,position:'relative',zIndex:1}}>
-        ✦ &nbsp; منصة ومضات ذكية &nbsp; ✦
+        ✦ &nbsp; {sT.splashFooter} &nbsp; ✦
       </div>
     </div>
     </>
@@ -2330,7 +2385,7 @@ const App=()=>{
     {showDraftPrompt && draftData && <DraftPrompt t={t} draft={draftData} onContinue={handleContinueDraft} onFresh={handleFreshStart} dir={dir}/>}
     <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%)'}} dir={dir}>
       <div style={{maxWidth:'900px',margin:'0 auto',background:'rgba(255,255,255,.97)',boxShadow:'0 4px 40px rgba(0,0,0,.15)',minHeight:'100vh'}}>
-        <SiteHeader t={t}/>
+        <SiteHeader t={t} lang={lang} onLang={changeLang}/>
         <div className="p-8">
           <button onClick={()=>setLang(null)} className="no-print" style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'10px 22px',borderRadius:'14px',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(15,39,73,.35)',marginBottom:'20px'}}>
             <span>{dir==='rtl'?'→':'←'}</span> {t.back}
@@ -2352,7 +2407,7 @@ const App=()=>{
     <Modal msg={modalMsg} onClose={()=>setModalMsg(null)}/>
     <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#f0f9ff 0%,#fdf4ff 50%,#fff7ed 100%)'}} dir={dir}>
       <div style={{maxWidth:'900px',margin:'0 auto',background:'rgba(255,255,255,.97)',boxShadow:'0 4px 40px rgba(0,0,0,.15)',borderRadius:'0 0 24px 24px',minHeight:'100vh'}}>
-        <MiniHeader t={t}/>
+        <MiniHeader t={t} lang={lang} onLang={changeLang}/>
         <div style={{padding:'0 32px 56px'}}>
           <StepBar phase={phase} t={t}/>
 
