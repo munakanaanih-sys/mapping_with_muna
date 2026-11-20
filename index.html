@@ -813,15 +813,24 @@ async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subj
   const BNAME=(i)=>`${BS}!$B$${B0+i}`;
   const MINS=`${BS}!$C$${B0}:$C$${BL}`, NAMES=`${BS}!$B$${B0}:$B$${BL}`;
   for(let i=1;i<nb;i++) wb.definedNames.add(`${BS}!$C$${B0+i}`,`BAND_MIN_${i+1}`);
+  /* Colour rules must not point to another sheet or to a defined name: Google Sheets, phone viewers
+     and some previews ignore such rules (no traffic-light colours). So every sheet that is coloured
+     gets a hidden helper column (ZZ) that copies the range limits, and the rules read only from it. */
+  const HCOL='ZZ', HIDX=702;
+  const BANDREF=(k)=>`$${HCOL}$${k}`;           // k = 2..nb  ↔  BAND_MIN_k
+  [...classSheets,wsS,wsE].forEach(ws=>{
+    for(let i=1;i<nb;i++) ws.getCell(`${HCOL}${i+1}`).value={formula:BMIN(i)};
+    ws.getColumn(HIDX).hidden=true;
+  });
   const levelOf=(ref)=>`IF(${ref}="","",LOOKUP(MAX(${ref},${BMIN(0)}),${MINS},${NAMES}))`;
   const legendText=(i)=>`${BNAME(i)}&" ("&${BMIN(i)}&"–"&${BTO(i)}&")"`;
   await wsB.protect('',{selectLockedCells:true,selectUnlockedCells:true,formatColumns:true});
 
   /* traffic-light conditional formatting: ratioExpr returns -1 for empty cells */
   const cfRules=(ratioExpr)=>bands.map((b,i)=>{
-    const cond= i===0 ? `AND(${ratioExpr}>=0,${ratioExpr}<BAND_MIN_2)`
-              : i<nb-1 ? `AND(${ratioExpr}>=BAND_MIN_${i+1},${ratioExpr}<BAND_MIN_${i+2})`
-              : `${ratioExpr}>=BAND_MIN_${nb}`;
+    const cond= i===0 ? `AND(${ratioExpr}>=0,${ratioExpr}<${BANDREF(2)})`
+              : i<nb-1 ? `AND(${ratioExpr}>=${BANDREF(i+1)},${ratioExpr}<${BANDREF(i+2)})`
+              : `${ratioExpr}>=${BANDREF(nb)}`;
     return {type:'expression',priority:i+1,formulae:[cond],
       style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FF'+bandLight(bands,i)}},font:{color:{argb:'FF'+DARK}}}};
   });
@@ -1141,6 +1150,8 @@ async function buildScreeningWorkbook(ExcelJS,{questions,bands,lang,teacher,subj
     bandsSheet:L.shBands,bandsFirstRow:B0,bandCount:nb,maxRow:R_MX,secRow:R_SEC,qnRow:R_QN,blRow:R_BL,tpRow:R_TP});
 
   wb.views=[{activeTab:1,firstSheet:0,visibility:'visible'}];
+  addBrandFooter(wb,lang);
+  wb.calcProperties={...(wb.calcProperties||{}),fullCalcOnLoad:true};   // Excel recalculates every formula on open
   return wb;
 }
 
@@ -1163,7 +1174,20 @@ async function readScreeningWorkbook(ExcelJS,arrayBuffer){
   if(!meta) throw new Error('nometa');
   const M=JSON.parse(cellText(meta.getCell('A1').value));
   const classList=M.classes||[M.gradesSheet];
-  const sheets=classList.map(n=>({name:n,ws:wb.getWorksheet(n)})).filter(x=>x.ws);
+  /* class names come from the real sheet names: a sheet the teacher renamed (e.g. "ז1" → "ז A")
+     or added by copying is still read, as long as it has the same question header rows */
+  const reserved=new Set(['_meta',M.bandsSheet]);
+  Object.values(XL).forEach(L=>[L.shGuide,L.shExam,L.shSummary,L.shAll,L.shBands].forEach(x=>reserved.add(x)));
+  const known=new Set(classList);
+  const numAt=(ws,r,c)=>{const v=ws.getCell(r,c).value;const x=typeof v==='object'&&v?(v.result??v):v;return x!==null&&x!==''&&!isNaN(Number(x));};
+  const looksLikeClass=(ws)=>{
+    if(!M.maxRow||!M.firstQCol||!M.qCount) return false;
+    for(let j=0;j<M.qCount;j++){ if(!numAt(ws,M.maxRow,M.firstQCol+j)) return false; }
+    return true;
+  };
+  const sheets=wb.worksheets
+    .filter(ws=>ws.state!=='veryHidden'&&ws.state!=='hidden'&&!reserved.has(ws.name)&&(known.has(ws.name)||looksLikeClass(ws)))
+    .map(ws=>({name:ws.name,ws}));
   if(!sheets.length) throw new Error('nosheets');
   const wsB=wb.getWorksheet(M.bandsSheet);
   let bands=null;
@@ -1217,7 +1241,7 @@ function analyticsFromWorkbook(res,bands){
     return {name:c,n:sc.length,average:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length*10)/10:0,counts:buildDist(sc,bands)};
   });
   return {
-    scores, counts:buildDist(scores,bands), bands:bands.map(b=>({...b})),
+    scores, counts:buildDist(scores,bands), bands:bands.map(b=>({...b})), fileLang:res.lang,
     totalStudents:n, average:n?scores.reduce((a,b)=>a+b,0)/n:0,
     students:students.map(s=>({name:s.name,cls:s.cls,pct:s.pct,total:s.total})),
     classes:classStats,
@@ -1234,8 +1258,27 @@ const EX={
     claudeOpen:'انسخ البرومبت وافتح Claude', claudeCopied:'✓ تم النسخ — الصق/ي في Claude إن لزم', claudeShow:'عرض البرومبت', claudeHide:'إخفاء البرومبت',
     claudeNote:'يكفي حساب Claude المجاني. لا حاجة لأي مفتاح API، والامتحان لا يمر عبر المنصة.',
     pasteClaude:'الصق/ي رد Claude هنا (يكفي لصق الرد كاملًا، والمنصة تلتقط الجدول منه)', parsedOk:'✓ تمت قراءة %1 سؤالًا — المجموع %2',
-    reportTitle:'تقرير معمّق وخطة تدخل مع Claude', reportSub:'ينسخ ملخص النتائج (المجالات، بلوم، الأقسام، كل سؤال) ويفتح Claude ليكتب لك تقريرًا مهنيًا بصيغة Word مع خطة تدخل لكل مجموعة.',
-    reportBtn:'أنشئ التقرير في Claude', reportPrivacy:'لا تُرسل أسماء الطلاب، فقط إحصاءات الصف.',
+    reportSub:'ينسخ برومبت مخصصًا لموضوع %S، مبنيًا على المجالات التي اخترتها في ملف الإكسل، ويفتح Claude ليُعدّ ملف Excel بالتحليل الكامل وتقرير Word ملخّصًا مع رسوم بيانية ومربّعات «תובנות והמלצות».',
+    reportBtn:'انسخ البرومبت وافتح Claude', reportPrivacy:'ملف الإكسل تُرفقينه أنتِ مباشرة في Claude، ولا يمر عبر المنصة.',
+    reportSteps:['اضغط/ي الزر أدناه: يُنسخ البرومبت ويفتح Claude في نافذة جديدة.','أرفق/ي ملف الإكسل نفسه الذي رفعته إلى المنصة (مع علامات الطلاب) بزر المشبك 📎.','الصق/ي البرومبت بـ Ctrl+V ثم أرسل/ي. سيُسلّم Claude ملف Excel مفصّلًا وملف Word ملخّصًا.'],
+    excelOk:'تم إنشاء الملف! افتح/ي الملف، أدخل/ي علامات الطلاب واحفظ/يه، ثم ارفع/يه هنا.',
+    colSection:'القسم', colBloom:'بلوم',
+    uploadTitle:'ارفع/ي ملف الإكسل بعد تعبئته', uploadAnyTime:'عندك ملف معبّأ من قبل؟ يمكنك رفعه مباشرة دون إنشاء ملف جديد.',
+    reportTitle:'تقرير ملخّص (דוח מסכם) لمركّز/ة التقييم مع Claude',
+    planTitle:'بوصلة المعلم: الوضع الحالي وخطة العمل', generatePlan:'إصدار بوصلة المعلم', interventionTitle:'بوصلة المعلم (توجيه مختصر)',
+    compassHint:'توجيه قصير للمعلم/ة: ما الوضع الآن ومن أين نبدأ. التقرير الكامل يُعدّ مع Claude في البطاقة أعلاه.',
+    situationTitle:'الوضع الحالي باختصار', startTitle:'من أين نبدأ؟',
+    sitAvg:'المعدل العام %1، وعدد الطلاب في المجال الأدنى «%4»: %2 (%3).', sitWeak:'أضعف المواضيع: %1.', sitStrong:'نقاط قوة: %1.',
+    sitBloom:'أضعف مستوى في بلوم: «%1» (%2%).', sitHard:'الأسئلة الأصعب: %1.', sitClasses:'الفرق بين الصفوف: الأعلى «%1» (%2) والأدنى «%3» (%4).',
+    stepWhole:'مع كل الصف: ابدأ/ي بموضوع «%1» (%2%) لأنه الأضعف لدى أغلب الطلاب.',
+    stepIntensive:'مجموعة التدخل المكثف (عدد الطلاب: %1): تعلّم في مجموعة صغيرة يركّز على %2.',
+    stepStrategic:'مجموعة الدعم (عدد الطلاب: %1): تدريب موجّه ومتابعة أسبوعية في %2.',
+    stepEnrich:'المتميزون (عدد الطلاب: %1): مهام إثرائية، ودور القرين الداعم لزملائهم.',
+    stepReassess:'بعد فترة العمل: مسح قصير في المواضيع نفسها، وقارِن/ي النتائج بزر «مقارنة مع امتحانات أخرى».',
+    compareBtn:'مقارنة مع امتحانات أخرى', compareTitle:'مقارنة بين عدة ملفات (امتحانات أو طبقات)',
+    compareHint2:'ارفع/ي ملف إكسل أو أكثر من ملفات المنصة (امتحان سابق، طبقة أخرى...). تُحسب كل الملفات بمجالات الملف الحالي حتى تكون المقارنة عادلة.',
+    compareUpload:'📂 إضافة ملفات للمقارنة', currentFile:'الملف الحالي', fileCol:'الملف', classesCol:'الصفوف', nCol:'عدد الطلاب', avgCol:'المعدل',
+    bloomCmp:'التحصيل حسب بلوم (%)', removeFile:'إزالة', cmpPctNote:'التوزيع بالنسب المئوية لأن عدد الطلاب يختلف بين الملفات.',
     bandsTitle:'مجالات توزيع العلامات', bandsSub:'حدد/ي عدد المجالات المعتمدة في مدرستك وأسماءها وحدودها. ستُبنى كل الحسابات والألوان في ملف الإكسل وفي التحليل حسبها.',
     bandsCount:'عدد المجالات', bandName:'اسم المجال', bandMin:'من (الحد الأدنى)', bandTo:'إلى', bandReset:'استعادة القيم المقترحة',
     nStudents:'عدد أسطر الطلاب في ورقة كل صف',
@@ -1246,7 +1289,7 @@ const EX={
     bandErr:{count:'عدد المجالات يجب أن يكون بين 4 و 6.',span:'في كل مجال، الحد الأعلى يجب أن يكون أكبر من الحد الأدنى أو مساويًا له.',name:'يرجى كتابة اسم لكل مجال.',range:'الحدود يجب أن تكون أرقامًا بين 0 و 100.',order:'المجالات متداخلة: الحد الأدنى لكل مجال يجب أن يكون أكبر من الحد الأعلى للمجال الذي قبله.'},
     excelBuilding:'جارٍ بناء الملف...', excelLibErr:'تعذّر تحميل مكتبة الإكسل. تأكد/ي من الاتصال بالإنترنت وأعد/ي تحميل الصفحة.',
     totalWarn:'تنبيه: مجموع العلامات القصوى للأسئلة هو %1 وليس 100. سيحسب الملف النسبة المئوية تلقائيًا.',
-    uploadTitle:'الطريقة الموصى بها: ارفع/ي ملف الإكسل بعد تعبئته', uploadBtn:'📂 اختيار ملف الإكسل المعبّأ', uploadHint:'تقرأ المنصة علامات كل طالب في كل سؤال وتُعدّ تحليلًا كاملًا.',
+    uploadBtn:'📂 اختيار ملف الإكسل المعبّأ', uploadHint:'تقرأ المنصة علامات كل طالب في كل سؤال وتُعدّ تحليلًا كاملًا.',
     orPaste:'أو الصق/ي عمود النسب المئوية يدويًا:', uploadErr:'لم أتمكن من قراءة الملف. تأكد/ي أنه الملف الذي أنشأته المنصة (بصيغة xlsx) وأنه يحتوي على علامات.', uploadEmpty:'الملف لا يحتوي على علامات طلاب بعد.',
     qAnalysis:'تحليل الأسئلة', bloomAnalysis:'التحصيل حسب مهارات بلوم', sectionAnalysis:'التحصيل حسب الأقسام', question:'السؤال', avgPct:'معدل التحصيل %', level:'المستوى',
     weakQs:'الأسئلة التي تحتاج إلى معالجة', studentsList:'قائمة الطلاب حسب المجالات', student:'الطالب', pctCol:'النسبة %', noNames:'(ارفع/ي الملف المعبّأ لعرض أسماء الطلاب)',
@@ -1258,8 +1301,27 @@ const EX={
     claudeOpen:'העתקת הפרומפט ופתיחת Claude', claudeCopied:'✓ הועתק — הדביקו ב-Claude במידת הצורך', claudeShow:'הצגת הפרומפט', claudeHide:'הסתרת הפרומפט',
     claudeNote:'מספיק חשבון Claude חינמי. אין צורך במפתח API, והמבחן לא עובר דרך הפלטפורמה.',
     pasteClaude:'הדביקו כאן את תשובת Claude (אפשר את כל התשובה – הפלטפורמה מאתרת את הטבלה)', parsedOk:'✓ נקראו %1 שאלות — סה״כ %2',
-    reportTitle:'דוח מעמיק ותוכנית התערבות עם Claude', reportSub:'מעתיק את סיכום התוצאות ופותח את Claude כדי לכתוב דוח מקצועי בפורמט Word עם תוכנית התערבות לכל קבוצה.',
-    reportBtn:'יצירת הדוח ב-Claude', reportPrivacy:'שמות התלמידים לא נשלחים – רק נתונים כיתתיים.',
+    reportSub:'מעתיק פרומפט מותאם למקצוע %S, המבוסס על הטווחים שבחרת בקובץ האקסל, ופותח את Claude להכנת קובץ Excel עם הניתוח המלא ודוח Word מסכם עם תרשימים ותיבות «תובנות והמלצות».',
+    reportBtn:'העתקת הפרומפט ופתיחת Claude', reportPrivacy:'את קובץ האקסל מצרפים ישירות ב-Claude; הוא לא עובר דרך הפלטפורמה.',
+    reportSteps:['לחצו על הכפתור: הפרומפט מועתק ו-Claude נפתח בחלון חדש.','צרפו בכפתור 📎 את אותו קובץ אקסל שהעליתם לפלטפורמה (עם ציוני התלמידים).','הדביקו את הפרומפט עם Ctrl+V ושלחו. Claude ימסור קובץ Excel מפורט וקובץ Word מסכם.'],
+    excelOk:'הקובץ נוצר! פתחו אותו, הזינו את ציוני התלמידים ושמרו, ואז העלו אותו כאן.',
+    colSection:'פרק', colBloom:'בלום',
+    uploadTitle:'העלו את קובץ האקסל לאחר המילוי', uploadAnyTime:'יש לכם כבר קובץ ממולא? אפשר להעלות אותו ישירות בלי ליצור קובץ חדש.',
+    reportTitle:'דוח מסכם לרכז/ת ההערכה עם Claude',
+    planTitle:'מצפן למורה: המצב הקיים ותוכנית עבודה', generatePlan:'הפקת מצפן למורה', interventionTitle:'מצפן למורה (הכוונה קצרה)',
+    compassHint:'הכוונה קצרה למורה: מה המצב עכשיו ומאיפה מתחילים. הדוח המלא מוכן עם Claude בכרטיס שלמעלה.',
+    situationTitle:'המצב הקיים בקצרה', startTitle:'מאיפה מתחילים?',
+    sitAvg:'הממוצע הכללי %1, ו-%2 מהתלמידים (%3) בטווח הנמוך «%4».', sitWeak:'הנושאים החלשים ביותר: %1.', sitStrong:'נקודות חוזק: %1.',
+    sitBloom:'רמת בלום החלשה ביותר: «%1» (%2%).', sitHard:'השאלות הקשות ביותר: %1.', sitClasses:'הפער בין הכיתות: הגבוהה «%1» (%2) והנמוכה «%3» (%4).',
+    stepWhole:'עם כל הכיתה: התחילו בנושא «%1» (%2%), כי הוא החלש ביותר אצל רוב התלמידים.',
+    stepIntensive:'קבוצת התערבות אינטנסיבית (%1 תלמידים): למידה בקבוצה קטנה עם מיקוד ב%2.',
+    stepStrategic:'קבוצת תמיכה (%1 תלמידים): תרגול מונחה ומעקב שבועי ב%2.',
+    stepEnrich:'המצטיינים (%1): משימות העשרה ותפקיד חונך עמית.',
+    stepReassess:'בסוף תקופת העבודה: מבדק קצר באותם נושאים, והשוואת התוצאות בכפתור «השוואה עם מבחנים אחרים».',
+    compareBtn:'השוואה עם מבחנים אחרים', compareTitle:'השוואה בין כמה קבצים (מבחנים או שכבות)',
+    compareHint2:'העלו קובץ אקסל אחד או יותר מקובצי הפלטפורמה (מבחן קודם, שכבה אחרת...). כל הקבצים מחושבים לפי הטווחים של הקובץ הנוכחי כדי שההשוואה תהיה הוגנת.',
+    compareUpload:'📂 הוספת קבצים להשוואה', currentFile:'הקובץ הנוכחי', fileCol:'קובץ', classesCol:'כיתות', nCol:'מספר תלמידים', avgCol:'ממוצע',
+    bloomCmp:'הישגים לפי בלום (%)', removeFile:'הסרה', cmpPctNote:'ההתפלגות באחוזים, כי מספר התלמידים שונה בין הקבצים.',
     bandsTitle:'טווחי התפלגות הציונים', bandsSub:'בחרו את מספר הטווחים הנהוג בבית הספר, את שמותיהם ואת הסף התחתון של כל טווח. כל החישובים והצבעים בקובץ ובניתוח ייבנו לפיהם.',
     bandsCount:'מספר טווחים', bandName:'שם הטווח', bandMin:'מ- (סף תחתון)', bandTo:'עד', bandReset:'שחזור ערכים מוצעים',
     nStudents:'מספר שורות תלמידים בגיליון של כל כיתה',
@@ -1270,7 +1332,7 @@ const EX={
     bandErr:{count:'מספר הטווחים חייב להיות בין 4 ל-6.',span:'בכל טווח הגבול העליון חייב להיות גדול מהתחתון או שווה לו.',name:'יש לתת שם לכל טווח.',range:'הגבולות חייבים להיות מספרים בין 0 ל-100.',order:'הטווחים חופפים: הגבול התחתון של כל טווח חייב להיות גדול מהעליון של הקודם.'},
     excelBuilding:'בונה את הקובץ...', excelLibErr:'לא ניתן לטעון את ספריית האקסל. בדקו את החיבור לאינטרנט ורעננו את הדף.',
     totalWarn:'שימו לב: סך הניקוד המרבי הוא %1 ולא 100. הקובץ יחשב את האחוז אוטומטית.',
-    uploadTitle:'מומלץ: העלו את קובץ האקסל לאחר מילוי', uploadBtn:'📂 בחירת קובץ אקסל ממולא', uploadHint:'הפלטפורמה קוראת את ציון כל תלמיד בכל שאלה ומכינה ניתוח מלא.',
+    uploadBtn:'📂 בחירת קובץ אקסל ממולא', uploadHint:'הפלטפורמה קוראת את ציון כל תלמיד בכל שאלה ומכינה ניתוח מלא.',
     orPaste:'או הדביקו ידנית את עמודת האחוזים:', uploadErr:'לא ניתן לקרוא את הקובץ. ודאו שזה הקובץ שהפלטפורמה יצרה (xlsx) ושיש בו ציונים.', uploadEmpty:'הקובץ עדיין לא מכיל ציוני תלמידים.',
     qAnalysis:'ניתוח שאלות', bloomAnalysis:'הישגים לפי מיומנויות בלום', sectionAnalysis:'הישגים לפי פרקים', question:'שאלה', avgPct:'ממוצע הישג %', level:'רמה',
     weakQs:'שאלות הדורשות טיפול', studentsList:'רשימת תלמידים לפי טווחים', student:'תלמיד', pctCol:'אחוז %', noNames:'(העלו את הקובץ הממולא כדי להציג שמות)',
@@ -1282,8 +1344,27 @@ const EX={
     claudeOpen:'Copy prompt & open Claude', claudeCopied:'✓ Copied — paste into Claude if needed', claudeShow:'Show prompt', claudeHide:'Hide prompt',
     claudeNote:'A free Claude account is enough. No API key needed, and the exam never passes through this platform.',
     pasteClaude:'Paste Claude\'s reply here (the whole reply is fine — the table is detected automatically)', parsedOk:'✓ Read %1 questions — total %2',
-    reportTitle:'In-depth report & intervention plan with Claude', reportSub:'Copies the results summary and opens Claude to write a professional Word report with an intervention plan per group.',
-    reportBtn:'Create the report in Claude', reportPrivacy:'Student names are not sent — only class statistics.',
+    reportSub:'Copies a %S-specific prompt built on the ranges you chose in the Excel file, and opens Claude to produce a full Excel analysis and a short Word summary report with charts and «תובנות והמלצות» boxes.',
+    reportBtn:'Copy prompt & open Claude', reportPrivacy:'You attach the Excel file directly in Claude; it never passes through this platform.',
+    reportSteps:['Press the button: the prompt is copied and Claude opens in a new tab.','Attach the same Excel file you uploaded here (with the students\' scores) using 📎.','Paste the prompt with Ctrl+V and send. Claude returns a detailed Excel file and a short Word report.'],
+    excelOk:'File created! Open it, enter the students\' scores and save, then upload it here.',
+    colSection:'Section', colBloom:'Bloom',
+    uploadTitle:'Upload the filled Excel file', uploadAnyTime:'Already have a filled file? You can upload it directly without creating a new one.',
+    reportTitle:'Summary report (דוח מסכם) for the assessment coordinator, with Claude',
+    planTitle:'Teacher compass: current situation and action plan', generatePlan:'Create the teacher compass', interventionTitle:'Teacher compass (short guidance)',
+    compassHint:'Short guidance for the teacher: where things stand and where to start. The full report is prepared with Claude in the card above.',
+    situationTitle:'Current situation in brief', startTitle:'Where to start?',
+    sitAvg:'Overall average %1; %2 students (%3) are in the lowest range "%4".', sitWeak:'Weakest topics: %1.', sitStrong:'Strengths: %1.',
+    sitBloom:'Weakest Bloom level: "%1" (%2%).', sitHard:'Hardest questions: %1.', sitClasses:'Gap between classes: highest "%1" (%2), lowest "%3" (%4).',
+    stepWhole:'With the whole class: start with "%1" (%2%), the weakest topic for most students.',
+    stepIntensive:'Intensive group (%1 students): small-group learning focused on %2.',
+    stepStrategic:'Support group (%1 students): guided practice and weekly follow-up in %2.',
+    stepEnrich:'Excelling students (%1): enrichment tasks and a peer-tutor role.',
+    stepReassess:'At the end of the work period: a short screening on the same topics; compare with "Compare with other exams".',
+    compareBtn:'Compare with other exams', compareTitle:'Compare several files (exams or grade levels)',
+    compareHint2:'Upload one or more Excel files from this platform (an earlier exam, another grade...). All files are counted with the current file\'s ranges so the comparison is fair.',
+    compareUpload:'📂 Add files to compare', currentFile:'Current file', fileCol:'File', classesCol:'Classes', nCol:'Students', avgCol:'Average',
+    bloomCmp:'Achievement by Bloom (%)', removeFile:'Remove', cmpPctNote:'Distribution shown in percentages because the number of students differs between files.',
     bandsTitle:'Performance Ranges', bandsSub:'Choose how many ranges your school uses, their names and lower bounds. All Excel calculations, colors and the analysis will follow them.',
     bandsCount:'Number of ranges', bandName:'Range name', bandMin:'From (lower bound)', bandTo:'To', bandReset:'Restore suggested values',
     nStudents:'Student rows per class sheet',
@@ -1294,7 +1375,7 @@ const EX={
     bandErr:{count:'Use 4 to 6 ranges.',span:'In each range the upper bound must be at least the lower bound.',name:'Please name every range.',range:'Bounds must be numbers between 0 and 100.',order:'Ranges overlap: each range must start above the previous range\'s upper bound.'},
     excelBuilding:'Building the file...', excelLibErr:'Could not load the Excel library. Check your connection and reload the page.',
     totalWarn:'Note: question maximums add up to %1, not 100. The file converts to percent automatically.',
-    uploadTitle:'Recommended: upload the filled Excel file', uploadBtn:'📂 Choose the filled Excel file', uploadHint:'The platform reads every student\'s score per question and builds a full analysis.',
+    uploadBtn:'📂 Choose the filled Excel file', uploadHint:'The platform reads every student\'s score per question and builds a full analysis.',
     orPaste:'Or paste the percent column manually:', uploadErr:'Could not read the file. Make sure it is the file this platform created (.xlsx) and that it contains scores.', uploadEmpty:'The file has no student scores yet.',
     qAnalysis:'Question Analysis', bloomAnalysis:'Achievement by Bloom Skill', sectionAnalysis:'Achievement by Section', question:'Question', avgPct:'Achievement %', level:'Level',
     weakQs:'Questions needing remediation', studentsList:'Students by Range', student:'Student', pctCol:'Percent %', noNames:'(upload the filled file to see names)',
@@ -1484,7 +1565,7 @@ const DeepAnalysis=({analytics,t})=>{
       <div className="rounded-2xl border overflow-x-auto">
         <div style={{background:'#0f766e',color:'white',fontWeight:800,padding:'8px 12px'}}>{t.qAnalysis}</div>
         <table className="w-full text-center">
-          <thead><tr><th style={th}>{t.question}</th><th style={th}>Section</th><th style={th}>Bloom</th>
+          <thead><tr><th style={th}>{t.question}</th><th style={th}>{t.colSection||'Section'}</th><th style={th}>{t.colBloom||'Bloom'}</th>
             {cls.length>1&&cls.map(c=><th key={c.name} style={{...th,background:'#0f766e'}}>{c.name}</th>)}
             <th style={th}>{t.avgPct}</th><th style={th}>{t.level}</th></tr></thead>
           <tbody>{pq.map((q,i)=>(
@@ -1530,6 +1611,7 @@ async function exportBandLists({analytics,t,lang,teacher}){
           c.border={bottom:{style:'thin',color:{argb:'FFE5E7EB'}}};});
       });
   });
+  addBrandFooter(wb,lang);
   await downloadWorkbook(wb,`groups_${teacher.grade||'class'}.xlsx`);
 }
 async function downloadWorkbook(wb,filename){
@@ -1622,62 +1704,365 @@ function parseExamJSON(text){
 }
 function parseExamReply(text){return parseExamJSON(text)||parseMD(text);}
 
-/* anonymised results summary → prompt for a narrative report in Claude */
-function buildClaudeReportPrompt({analytics,lang,subjectName,teacher}){
-  const B=analytics.bands, n=analytics.totalStudents;
-  const dist=B.map((b,i)=>`- ${b.name} (${bandRangeLabel(B,i)}): ${analytics.counts[i]} (${n?(analytics.counts[i]/n*100).toFixed(1):0}%)`).join('\n');
-  const qs=(analytics.perQuestion||[]).map(q=>`| ${q.section} | ${q.qNum} | ${q.bloomSkill} | ${q.contentSkill} | ${q.max} | ${q.avgPct} |`).join('\n');
-  const grp=(arr)=>(arr||[]).map(g=>`- ${g.name}: ${g.avgPct}%`).join('\n');
-  const clsTxt=(analytics.classes||[]).length>1?'\n\n## '+({ar:'مقارنة بين الصفوف',he:'השוואה בין הכיתות',en:'Class comparison'}[lang]||'')+'\n'+
-    analytics.classes.map(c=>`- ${c.name}: n=${c.n}, avg=${c.average} | `+B.map((b,i)=>`${b.name}: ${c.counts[i]}`).join(', ')).join('\n'):'';
-  const head={
-    ar:`أنت مستشار تربوي خبير في تحليل نتائج المسوحات الصفية. هذه نتائج مسح صفي في ${subjectName} للصف ${teacher.grade||''} (عدد الطلاب: ${n}، المعدل العام: ${analytics.average.toFixed(1)}).`,
-    he:`אתה יועץ פדגוגי מומחה לניתוח מבדקים כיתתיים. אלה תוצאות מבדק ב${subjectName} לכיתה ${teacher.grade||''} (מספר תלמידים: ${n}, ממוצע: ${analytics.average.toFixed(1)}).`,
-    en:`You are an expert educational consultant. These are class screening results in ${subjectName} for class ${teacher.grade||''} (students: ${n}, average: ${analytics.average.toFixed(1)}).`
-  }[lang]||'';
-  const L={ar:['توزيع الطلاب على المجالات','التحصيل حسب مهارات بلوم','التحصيل حسب الأقسام','تحليل الأسئلة','| القسم | السؤال | بلوم | الموضوع | القصوى | معدل التحصيل % |',
-    `المطلوب: أنشئ تقريرًا مهنيًا بصيغة Word (ملف docx) لمركز/ة الموضوع، منسقًا من اليمين لليسار، يتضمن:
-1. قراءة عامة للنتائج وما تعكسه.
-2. نقاط القوة ونقاط الضعف حسب مهارات بلوم والمواضيع، مع تفسير تربوي محتمل.
-3. أهم 3 فجوات تعليمية تحتاج إلى معالجة فورية.
-4. خطة تدخل عملية لكل مجموعة (المجالات الدنيا، المتوسطة، العليا): أهداف، أنشطة صفية مقترحة، وطريقة متابعة.
-5. توصيات لمركز/ة الموضوع لاجتماع الطاقم ولبناء امتحان إعادة التقييم.
-استخدم جداول وعناوين واضحة، ولغة مهنية موجزة.`],
-    he:['התפלגות התלמידים לפי טווחים','הישגים לפי מיומנויות בלום','הישגים לפי פרקים','ניתוח שאלות','| פרק | שאלה | בלום | נושא | מרבי | ממוצע הישג % |',
-    `המשימה: צור דוח מקצועי כקובץ Word (docx) לרכז/ת המקצוע, מימין לשמאל, הכולל:
-1. קריאה כללית של התוצאות.
-2. חוזקות וחולשות לפי בלום ונושאים, עם הסבר פדגוגי אפשרי.
-3. שלושת הפערים החשובים לטיפול מיידי.
-4. תוכנית התערבות מעשית לכל קבוצה (טווחים נמוכים, בינוניים, גבוהים): מטרות, פעילויות ודרכי מעקב.
-5. המלצות לישיבת צוות ולבניית מבחן חוזר.
-השתמש בטבלאות ובכותרות ברורות ובשפה מקצועית ותמציתית.`],
-    en:['Students by range','Achievement by Bloom skill','Achievement by section','Question analysis','| Section | Q | Bloom | Topic | Max | Achievement % |',
-    `Task: create a professional report as a Word file (.docx) for the subject coordinator including:
-1. An overall reading of the results.
-2. Strengths and weaknesses by Bloom skill and topic, with likely pedagogical explanations.
-3. The 3 most important learning gaps to address now.
-4. A practical intervention plan per group (low, middle, high ranges): goals, classroom activities, follow-up.
-5. Recommendations for the staff meeting and for building the re-assessment exam.
-Use clear headings and tables, concise professional language.`]}[lang]||null;
-  if(!L) return '';
-  return `${head}
+/* ═══════════ SUBJECT-SPECIFIC SUMMARY-REPORT PROMPT (דוח מסכם) ═══════════
+   One prompt per subject (the subject the teacher chose at the start), written in English.
+   The teacher attaches the results Excel (the same file uploaded to the platform) to Claude.
+   Class names are taken exactly from the sheet names in that file, the ranges (المجالات)
+   from its ranges sheet, and classes are grouped into grade levels for per-grade analysis
+   plus a comparison between grades. Output language: Arabic for Arabic, Hebrew otherwise. */
+const REPORT_INSIGHTS='תובנות והמלצות';
+const RULE='══════════════════════════════';
 
-## ${L[0]}
-${dist}${clsTxt}
-
-## ${L[1]}
-${grp(analytics.byBloom)}
-
-## ${L[2]}
-${grp(analytics.bySection)}
-
-## ${L[3]}
-${L[4]}
-|---|---|---|---|---|---|
-${qs}
-
-${L[5]}`;
+/* grade level from a class sheet name: "ז1","ז A","ז-2","ח'3","سابع أ","7B" → "ז","ז","ז","ח","سابع","7" */
+function gradeOfClass(name){
+  const m=String(name||'').trim();
+  let k=m.replace(/[\s\-_.\/]*\d+$/,'');
+  if(k===m) k=m.replace(/[\s\-_.\/]*[A-Za-z]$/,'');
+  if(k===m) k=m.replace(/[\s\-_.\/]+[֐-׿؀-ۿ]['׳]?$/,'');
+  k=k.replace(/['"׳״]/g,'').trim();
+  return k||m;
 }
+function groupClassesByGrade(names){
+  const g=[];
+  names.forEach(n=>{const k=gradeOfClass(n);let e=g.find(x=>x.grade===k);if(!e){e={grade:k,classes:[]};g.push(e);}e.classes.push(n);});
+  return g;
+}
+
+const REPORT_SUBJECTS={
+  arabic:{
+    out:'ar', subj:'Arabic language', title:'تحليل نتائج المسح الصفي في اللغة العربية',
+    expert:'an expert in educational assessment and educational data analysis, specialising in teaching Arabic language in middle school (grades 7 ז, 8 ח, 9 ט) in Arab schools in Israel, and familiar with the language-skill frameworks of the Arabic curriculum for these grades',
+    langRules:`- All outputs (the Excel file and the Word file) are written in Modern Standard Arabic: headings, skill names, explanations, insights, recommendations, sheet names and chart labels.
+- Exception: the title of the insight boxes and the footer are written in Hebrew, exactly as given below.
+- Keep student names and class names exactly as they appear in the file.`,
+    skillsTitle:'A. Understanding the skills and mapping them to the questions',
+    skills:`2) Map every question to the language skill(s) commonly used in Arabic-language teaching, taking into account the expected level of each grade. For example (use the Arabic term in the outputs):
+   • Reading comprehension (الفهم القرائي):
+     - Literal / explicit meaning (الفهم الحرفي/المعنى الصريح): retrieving explicitly stated information, details and events.
+     - Inferential / implicit meaning (الفهم الاستنتاجي/المعنى الضمني): reading between the lines, causes and effects, the writer's intentions.
+     - Critical and evaluative (الفهم النقدي والتقييمي): giving and justifying an opinion, judging ideas, fact vs. opinion.
+     - Appreciative / aesthetic (الفهم التذوقي/الجمالي): imagery, word choice, rhetorical devices.
+     - Creative (الفهم الإبداعي): alternative titles or endings, applying ideas in new situations.
+     - Main idea and sub-ideas, organising and summarising information.
+     - Text structure and genre (narrative, informational, persuasive, argumentative...), cohesion and connectives.
+     - Comparing and connecting two or more texts (especially grades 8 and 9).
+   • Vocabulary and lexicon (الثروة اللغوية والمعجم): meaning from context, synonyms and antonyms, roots and dictionary use, semantic fields.
+   • Grammar and syntax (القواعد والنحو): parsing (الإعراب), nominal and verbal sentences, grammatical functions in context, grade-appropriate grammar topics.
+   • Morphology (الصرف): الميزان الصرفي, derivatives, المجرد والمزيد, grade-appropriate morphology topics.
+   • Spelling and punctuation (الإملاء وعلامات الترقيم).
+   • Written expression (التعبير الكتابي): organising ideas, correct language, coherence and cohesion, argumentative and persuasive writing (especially higher grades).
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← maximum score.
+
+4) If a question's classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping. Always keep the topic name as written in the file and add the standard pedagogical term next to it.`,
+    skillExtra:'   - Compare the comprehension levels (explicit ← implicit ← critical ← appreciative) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every low skill with specific strategies, work groups and a timetable, and reinforcement of mastered skills)',
+    team:'for the Arabic-language staff',
+    notes:'ملاحظات وافتراضات', support:'طلاب الدعم'
+  },
+  hebrew:{
+    out:'he', subj:'Hebrew', title:'ניתוח תוצאות המבדק הכיתתי בעברית',
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching Hebrew as a second language in middle schools (grades ז, ח, ט) in Arab schools in Israel, and familiar with the Hebrew curriculum and the skills tested in class screenings',
+    langRules:`- All outputs (the Excel file and the Word file) are written in Hebrew only: headings, skill names, explanations, insights, recommendations, sheet names and chart labels.
+- Keep student names and class names exactly as they appear in the file.`,
+    skillsTitle:'A. Understanding the skills and mapping them to the questions',
+    skills:`2) Map every question, by its topic, to the matching skill of the Hebrew curriculum for Arabic-speaking schools, taking into account the expected level of each grade. For example (use the Hebrew curriculum term in the outputs):
+   • Reading comprehension (הבנת הנקרא):
+     - Locating explicit information (איתור מידע גלוי).
+     - Inference and implicit information (הסקת מסקנות ומידע סמוי): between the lines, cause and effect, writer's intention.
+     - Interpreting and integrating information (פרשנות ושילוב מידע).
+     - Evaluation and critique (הערכה וביקורת): stating and justifying a position, fact vs. opinion.
+     - Main and secondary ideas, giving a title, summarising.
+     - Text structure and genre (story, information, argument, instructions, notice, letter...).
+     - Connectives and logical relations (contrast, cause, result, addition, time).
+     - Comparing texts (mainly grades ח and ט).
+   • Vocabulary (אוצר מילים): meaning from context, synonyms and antonyms, collocations and common expressions, semantic fields and word families (same root).
+   • Language structure / grammar (מבנה הלשון): root and בניין, verb conjugation in tenses (past, present, future, imperative) and persons, noun and adjective agreement (gender, number), prepositions and their inflection (שלי, לי, אותי, איתי...), pronouns, סמיכות, definiteness, sentence structure, question words, negation.
+   • Writing (כתיבה והבעה בכתב): full and reasoned answers, functional writing (letter, message, notice, paragraph), organisation, correct language, cohesion.
+   • Spelling and punctuation (כתיב ופיסוק).
+   • Listening comprehension (הבנת הנשמע), if the screening includes it.
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← maximum score.
+
+4) If a question's classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping. Always keep the topic name as written in the file and add the standard curriculum term next to it.`,
+    skillExtra:'   - Compare the comprehension levels (explicit information ← inference ← interpretation ← evaluation and critique) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every weak skill with specific teaching strategies, group work and a suggested timetable, and reinforcement of mastered skills; e.g. for implicit information: "why?" and "what can we infer?" questions, think-aloud, graphic organisers; for vocabulary: words in context, word families, spaced repetition)',
+    team:'for the school\'s Hebrew staff',
+    notes:'הערות והנחות', support:'תלמידים לתמיכה'
+  },
+  english:{
+    out:'he', subj:'English', title:'ניתוח תוצאות המבדק הכיתתי באנגלית',
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching English as a foreign language (EFL) in middle schools (grades ז, ח, ט) in Arab schools in Israel, and familiar with the English curriculum and the skills tested in class screenings',
+    langRules:`- All outputs (the Excel file and the Word file) are written in Hebrew: headings, explanations, insights, recommendations, sheet names and chart labels.
+- Skill names only stay in English, exactly as they appear in the file (e.g. Reading Comprehension, Creative Writing), with no translation or change, in every table, chart and text.
+- Keep student names and class names exactly as they appear in the file.`,
+    skillsTitle:'A. The skills and their mapping to the questions',
+    skills:`2) The skills appear in the file in the question-topic row (e.g. Reading Comprehension, Creative Writing). Use them as they are, with their original English names, and assign each question to the skill the file gives it. Do not invent new skills and do not change the existing classification.
+
+3) Only if a question has no skill defined in the file, assign it by its content to the most suitable skill already appearing in the file. If none fits, use a suitable skill from the English curriculum domains (e.g. Reading Comprehension, Vocabulary, Grammar, Writing, Listening Comprehension, Access to Information), in English, and record this in the notes sheet.
+
+4) If the file also has sub-skills (e.g. Literal Understanding, Inference, Main Idea, Vocabulary in Context, Verb Tenses), use them as a second level of analysis, also in English.
+
+5) For each grade, build a table linking: question number ← skill ← sub-skill (if any) ← Bloom level as in the file ← maximum score.`,
+    causeEx:', and explain pedagogically the likely cause of difficulty, bearing in mind that English is a foreign language for these students.',
+    skillExtra:'   - If the file allows it, compare reading-comprehension levels (explicit information ← inference ← interpretation and evaluation) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every weak skill with specific teaching strategies, group work and a suggested timetable, and reinforcement of mastered skills; e.g. in Reading Comprehension: skimming and scanning, inference questions, graphic organisers; in Vocabulary: words in context and spaced repetition; in Creative Writing: guided writing, opening templates and rubrics)',
+    team:'for the school\'s English staff',
+    notes:'הערות והנחות', support:'תלמידים לתמיכה', skillNote:' (skill names in English)'
+  },
+  science:{
+    out:'he', subj:'Science and Technology', title:'ניתוח תוצאות המבדק הכיתתי במדע וטכנולוגיה',
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching Science and Technology in middle schools (grades ז, ח, ט) in Arab schools in Israel, and familiar with the Science and Technology curriculum, the מיצ"ב tests, school exams, and the scientific thinking and inquiry skills they test',
+    langRules:`- All outputs (the Excel file and the Word file) are written in Hebrew: headings, skill names, explanations, insights, recommendations, sheet names and chart labels.
+- Question topics or skill names in the file may be written in Arabic. Read and understand them, and present them in Hebrew in the outputs (you may add the original name in brackets).
+- Keep student names and class names exactly as they appear in the file.`,
+    skillsTitle:'A. Classifying the questions by scientific skills',
+    skills:`2) Classify every question, by its topic and by what it requires from the student, into the matching skill from those used in Science and Technology tests in Arab schools in Israel, taking into account the expected level of each grade. For example (use the Hebrew term in the outputs):
+   • Scientific inquiry skills (מיומנויות חקר מדעי): formulating a research question; formulating and justifying a hypothesis; identifying variables (independent, dependent, controlled); identifying a control group and its role; planning an experiment (steps, instruments, measurement); drawing conclusions from results and checking them against the hypothesis; evaluating an experiment (limitations, sources of error, improvements, repetitions).
+   • Processing, representing and interpreting data (עיבוד, ייצוג ופרשנות נתונים): reading a graph; reading a table; building a graph or table (type, axes, units); moving between representations (text ↔ table ↔ graph ↔ diagram); trends and relations between variables; simple calculations and units.
+   • Understanding scientific text (הבנת טקסט מדעי): explicit information; implicit information and conclusions; main idea and concepts in context; illustrations, diagrams and models.
+   • Scientific knowledge and understanding (ידע והבנה מדעיים): facts, concepts and principles; explaining phenomena (cause and effect); applying knowledge to a new situation or everyday problem; using scientific models.
+   • Technology and systems thinking (טכנולוגיה וחשיבה מערכתית): identifying a technological need, design process and problem solving; science-technology-society-environment links; systems thinking (components, links, input-process-output).
+   • Scientific writing and argumentation (כתיבה וטיעון מדעי): a full, reasoned scientific explanation; claim-evidence-reasoning; correct use of scientific terms.
+
+3) In addition to the skill, classify each question by its content domain (e.g. systems and processes in living things, materials, energy, Earth and the universe, technological systems, or any other domain in the file).
+
+4) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← content domain ← maximum score.
+
+5) Always keep the topic as written in the file and add the matching skill from the list above next to it. If a classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping.`,
+    calcExtra:'\n   - Also calculate the success rate in every content domain.',
+    causeEx:', and explain pedagogically the likely cause of difficulty (e.g. difficulty in the skill itself, in understanding the language of the question, or a gap in content knowledge).',
+    skillExtra:'   - Check whether the difficulty stems mainly from inquiry and data-processing skills or from content knowledge, and show this clearly.',
+    recos:'for the teacher (a support plan for every weak skill with specific teaching strategies, group work and a suggested timetable, and reinforcement of mastered skills; e.g. for identifying variables: routine practice analysing short experiments with a "change – measure – keep constant" table; for reading graphs: gradual practice from reading a point to identifying a trend and inferring; for scientific text: reading strategies, a concept glossary and graphic organisers; for hypotheses and research questions: "if... then... because..." templates; for argumentation: claim-evidence-reasoning; and hands-on experiments and inquiry activities in class)',
+    team:'for the school\'s science staff',
+    gapEx:' (cumulative gap, e.g. identifying variables or reading graphs)',
+    topEnrich:'(enrichment, inquiry projects and peer tutoring)',
+    sheet2:'question classification by skills and content domains (per grade)',
+    sheet4:'skills and content-domain analysis (per class and per grade), hardest and easiest questions',
+    notes:'הערות והנחות', support:'תלמידים לתמיכה'
+  },
+  math:{
+    out:'he', subj:'Mathematics', title:'ניתוח תוצאות המבדק הכיתתי במתמטיקה', topicUnit:true,
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching mathematics in middle schools (grades ז, ח, ט) in Arab schools in Israel, and familiar with the mathematics curriculum, the מיצ"ב tests, school exams, and the mathematical thinking skills they test',
+    langRules:`- All outputs (the Excel file and the Word file) are written in Hebrew: headings, skill and topic names, explanations, insights, recommendations, sheet names and chart labels.
+- Question topics or skill names in the file may be written in Arabic. Read and understand them, and present them in Hebrew in the outputs (you may add the original name in brackets).
+- Keep student names and class names exactly as they appear in the file.`,
+    skillsTitle:'A. Classifying the questions by content domain, topic and thinking level',
+    skills:`2) Classify every question on two dimensions, as is customary in the מיצ"ב and Ministry of Education mathematics tests, and according to each grade's curriculum (use the Hebrew terms in the outputs):
+
+   Dimension 1 – content domain and topic:
+   • Numbers and operations (מספרים ופעולות): signed numbers and operations; fractions and decimals; percentages (percent of a quantity, percent change, discount and price increase); ratio and proportion, scale, speed; powers and roots, order of operations, laws of operations; estimation and checking reasonableness.
+   • Algebra (אלגברה): algebraic expressions (collecting like terms, distributive law, short multiplication formulas, substitution); first-degree equations, equations with fractions, systems of equations (by grade); inequalities; word problems solved with an equation; sequences and patterns, generalisation.
+   • Functions (פונקציות): the function concept and its representations (verbal, table, graph, algebraic); coordinate system, reading and interpreting graphs; linear function (slope, intercepts, parallel lines); quadratic function (grade ט per curriculum); increase/decrease, positivity/negativity.
+   • Geometry and measurement (גאומטריה ומדידה): angles (adjacent, vertical, between parallel lines); triangles (angle sum, types, congruence, isosceles); quadrilaterals and their properties; Pythagoras; similarity (by grade); perimeter and area, circle; solids (nets, surface area, volume); geometric reasoning and proof.
+   • Statistics and probability (סטטיסטיקה והסתברות): collecting, organising and presenting data; reading diagrams; mean, median, mode; basic probability.
+
+   Dimension 2 – thinking level (also use the Bloom level already in the file to decide):
+   • Knowledge and procedures (ידע וביצוע): concepts, facts and rules, familiar calculations and algorithms.
+   • Understanding and application (הבנה ויישום): applying knowledge in a familiar situation, moving between representations, one- or two-step problems.
+   • Mathematical thinking and problem solving (חשיבה מתמטית ופתרון בעיות): multi-step or new problems, generalisation, reasoning, justification and proof, evaluating a solution.
+
+   Also, where relevant, note the process skills a question requires: word problems and understanding mathematical text; moving between representations; mathematical reasoning and communication (explaining the solution in writing).
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← content domain ← topic ← thinking level ← process skill (if relevant) ← maximum score.
+
+4) Always keep the topic as written in the file and add the matching classification from the list above next to it. If a classification is unclear or fits more than one category, choose the most suitable one and justify it briefly, without stopping.`,
+    analysisTitle:'Analysis by content domain, topic and thinking level',
+    analysisCalc:'   - Calculate the success rate in every content domain, every topic and every thinking level, in every class and for the whole grade.\n   - Classify the domains and topics:',
+    causeEx:', and explain pedagogically the likely cause of difficulty (e.g. a conceptual knowledge gap, an algorithmic error, difficulty understanding the text of a word problem, or difficulty moving between representations).',
+    skillExtra:'   - Compare the thinking levels (knowledge and procedures ← understanding and application ← mathematical thinking) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every weak topic with specific teaching strategies, group work and a suggested timetable, and reinforcement of mastered topics; e.g. signed numbers: the number line and concrete models; fractions and percentages: visual models (bar, rectangle) and everyday contexts; word problems: the "what is given – what is asked – what is the way" strategy and marking key words; functions: systematic movement between representations; geometry: working with sketches and a "claim – reason" table; higher-order thinking: open questions, explaining solutions and mathematical discourse; and spaced review of foundation topics)',
+    team:'for the school\'s mathematics staff',
+    gapEx:' (cumulative gap, e.g. fractions, percentages or signed numbers, which affect learning in algebra and geometry)',
+    lowTreat:'(a remedial plan in foundation topics)', topEnrich:'(challenge problems, enrichment and peer tutoring)',
+    sheet2:'question classification by content domain, topic and thinking level (per grade)',
+    sheet4:'content domain, topic and thinking-level analysis (per class and per grade), hardest and easiest questions',
+    skillChart:'chart of success rates by content domain and thinking level',
+    skillTable:'short table of low-achievement topics that need a support plan and mastered topics that need reinforcement',
+    notes:'הערות והנחות', support:'תלמידים לתמיכה'
+  }
+};
+
+function buildClaudeReportPrompt({analytics,subject,teacher}){
+  const S=REPORT_SUBJECTS[subject]||REPORT_SUBJECTS.arabic;
+  const AR=S.out==='ar', OUT=AR?'Arabic':'Hebrew';
+  const B=analytics.bands||[], nb=B.length, n=analytics.totalStudents||0;
+  const nm=(i)=>`"${B[i].name}" (${bandRangeLabel(B,i)})`;
+  const low=nm(0), low2=nb>1?nm(1):low, top=nm(nb-1);
+  const U=S.topicUnit?'topic':'skill', Us=S.topicUnit?'topics':'skills';
+  const classes=(analytics.classes||[]).map(c=>c.name).filter(Boolean);
+  const groups=groupClassesByGrade(classes);
+  const multi=groups.length>1;
+  const XLs=XL[analytics.fileLang]||XL.ar;
+  const ignore=[XLs.shGuide,XLs.shAll,XLs.shSummary,XLs.shExam].map(s=>`"${s}"`).join(', ');
+  const bandsSheet=`"${XLs.shBands}"`;
+  const pct=(c)=>n?(c/n*100).toFixed(1):'0';
+  const bandLines=B.map((b,i)=>`   • ${nm(i)}`).join('\n');
+  const colorLines=B.map((b,i)=>`   - ${nm(i)}: #${bandLight(B,i)}`).join('\n');
+  const classList=classes.length?classes.map(c=>`"${c}"`).join(', '):'(every sheet that contains student rows)';
+  const gradeLines=groups.map(g=>`   • Grade "${g.grade}": ${g.classes.map(c=>`"${c}"`).join(', ')}`).join('\n');
+  const refDist=B.map((b,i)=>`${b.name}: ${analytics.counts[i]} (${pct(analytics.counts[i])}%)`).join(', ');
+  const refCls=(analytics.classes||[]).map(c=>`   - "${c.name}": n=${c.n}, average ${c.average} | `+B.map((b,i)=>`${b.name}: ${c.counts[i]}`).join(', ')).join('\n');
+  const refBloom=(analytics.byBloom||[]).map(g=>`${g.name}: ${g.avgPct}%`).join(', ');
+  const meta=[teacher&&teacher.name&&`teacher: ${teacher.name}`,teacher&&teacher.grade&&`grade: ${teacher.grade}`,teacher&&teacher.date&&`date: ${teacher.date}`].filter(Boolean).join(', ');
+  const skillNote=S.skillNote||'';
+
+  return `You are ${S.expert}.
+
+⚠️ Important before you start:
+Carry out everything directly, without asking any question, requesting clarification or waiting for approval. If anything in the data, the classification of questions or the grade grouping is ambiguous, make the most pedagogically appropriate decision yourself, record your assumptions in a sheet named "${S.notes}" in the Excel file, and complete the analysis to the end. (The only exception: if no Excel file is attached to this message, write one line asking for it and stop.)
+
+Attached is an Excel file with the results of a class screening (مسح صفي / מבדק כיתתי) in ${S.subj}${meta?` (${meta})`:''}.
+
+Output language:
+${S.langRules}
+
+${RULE}
+0. File structure, classes and grade levels
+${RULE}
+- The file was produced by the class-screening platform. Its sheets are:
+  • Class sheets – one sheet per class; the sheet name IS the class name. The class sheets in this file are: ${classList}. Use these names exactly as written (they may be a letter and a number like "ז1", a letter and a Latin letter like "ז A", or any other form). At the top of each class sheet there are header rows giving, for every question: section, question number, Bloom level, question topic and maximum score. Below them there is one row per student (with the name) and the student's score in each question, followed by total, percentage and range.
+  • The ${bandsSheet} sheet: the score ranges (المجالات) the teacher chose for the distribution (name, from, to). Use these ranges exactly throughout the analysis, instead of any fixed score groups.
+  • The ${ignore} sheets: instructions and automatic calculations. Do not treat them as classes; use them only to cross-check.
+  • Ignore hidden sheets.
+- A student whose row is completely empty was absent: do not count them.
+
+Grade levels: the classes are grouped into grade levels by the grade part of the sheet name (e.g. "ז A", "ז B" and "ז1" all belong to grade ז; ז = 7th, ח = 8th, ט = 9th). Grouping detected from the sheet names:
+${gradeLines||'   • (determine the grouping from the sheet names)'}
+Verify this grouping against the sheet contents (titles, question structure); if it is wrong, correct it and record the correction in "${S.notes}".
+${multi?`- This file contains ${groups.length} grade levels. Run the FULL analysis below separately for each grade level (its own classes, skills, distribution, support lists and charts), and then add a comparison between the grade levels (section B.6).`:'- This file contains one grade level. Run the analysis for it and compare its classes. Skip the between-grades comparison.'}
+- Classes of the same grade have the same structure and question order, so compare the same question and the same ${U} directly between them.
+- Do not compare different grades question by question unless the screenings are actually identical. Compare grades on averages, range distribution and shared ${Us} only, and state that different screenings limit the comparison.
+
+Score ranges chosen by the teacher (from the ${bandsSheet} sheet):
+${bandLines}
+A score between two ranges counts in the lower range; a score below the first range counts in it, and above the last range in the last. If the ${bandsSheet} sheet in the file shows different values, use the file's values and record this in "${S.notes}".
+
+${RULE}
+${S.skillsTitle}
+${RULE}
+1) Every question in the file already has a Bloom level and a topic (in the header rows of the class sheets). Keep them as they are and base the classification on them.
+
+${S.skills}
+
+${RULE}
+B. Required analysis (for each grade level separately)
+${RULE}
+1) Student scores and averages:
+   - Calculate each student's total score as a percentage (out of 100).
+   - Calculate the average of each class and of each grade level, with the highest score, lowest score and standard deviation for each class.
+
+2) ${S.analysisTitle||'Skills analysis'}:
+${S.analysisCalc||'   - Calculate the success rate in every main skill and sub-skill, in every class and for the whole grade.\n   - Classify the skills:'}
+     • Low achievement – needs a support plan: below 55%.
+     • Medium achievement – needs follow-up: 55%–75%.
+     • Mastery – needs reinforcement and maintenance: above 75%.${S.calcExtra||''}
+   - Also calculate the success rate for each Bloom level as it appears in the file.
+   - Identify the hardest and easiest questions (lowest and highest success rate)${S.causeEx||', and explain pedagogically the likely cause of difficulty.'}
+${S.skillExtra}
+
+3) Distribution of students across the ranges, in each class:
+   - Count the students in each of the ${nb} ranges above, with the percentage of each range, in each class and for the whole grade.
+   - Make sure the range counts add up to the number of students in the class.
+
+4) Named lists of students who need support to close gaps:
+   - For each class, list the students recommended for support:
+     • Students in the range ${low} (top priority).
+${nb>1?`     • Students in the range ${low2} (support and follow-up).\n`:''}     • Students whose score is one standard deviation or more below their class average, even if they are in a higher range.
+     • Students whose total is acceptable but who have a clear weakness in a specific ${U} (below 55% in it).
+   - For each student give: name, grade, class, total score, range, gap from the class average, the ${Us} needing support, and priority level (high / medium).
+   - Build a table for every low-achievement ${U} with the names of the students who are weak in it, to form support groups by ${U}.
+   - List the excelling students (range ${top}) for enrichment or as peer tutors.
+
+5) Comparison between the classes of the grade:
+   - Compare the classes of the grade by average, range distribution and success rate in every ${U} and every question.
+   - Highlight notable differences (a ${U} weak in only one class, or weak in all classes of the grade).
+   - Create charts: columns for class averages, clustered columns for ${U} success rates by class, and a chart of the range distribution.
+
+6) Comparison between grade levels (${multi?'REQUIRED – this file contains more than one grade level':'only if the file contains more than one grade level'}):
+   - Compare the grade levels by averages, range distribution and success rates in the shared ${Us}.
+   - Point out ${Us} that stay weak across grades${S.gapEx||' (cumulative gap)'}, or ${Us} that improve as the grades advance.
+   - Create comparison charts between the grade levels, and state the limits of the comparison if the screenings differ.
+
+7) Insights and recommendations:
+   - Extract the main insights for every class and every grade level.
+   - Write practical recommendations suited to each grade level and to teaching ${S.subj}: ${S.recos}; for students in the range ${low} ${S.lowTreat||'(a remedial plan)'}; for excelling students ${S.topEnrich||'(enrichment and peer tutoring)'}; ${S.team} (if the file covers more than one grade); and for the school management and parents.
+
+${RULE}
+C. Use of colour
+${RULE}
+Use the same range colours as the platform's Excel file (a traffic-light scale from red for the lowest range to green for the highest), consistently in both files:
+${colorLines}
+   - Low-achievement ${Us} (below 55%) and high-priority students: the colour of the lowest range. Medium ${Us}: yellow/orange. Mastered ${Us} (above 75%) and excelling students: the colour of the highest range.
+   - In the Excel file use Conditional Formatting so the colours update automatically.
+   - Add a clear colour legend on every Excel sheet and at the start of the Word file.
+   - Do not overuse colour: use it only where it helps read the results quickly.
+
+${RULE}
+D. Required outputs
+${RULE}
+1) Excel file (.xlsx) – the full, detailed analysis, in ${OUT}${skillNote}, sheets right-to-left:
+   All the calculations, tables, lists and charts above, without shortening. Sheets:
+   1. "${S.notes}" (notes and assumptions).
+   2. ${S.sheet2||'mapping of questions to skills (per grade)'}.
+   3. one sheet per class (student scores, averages and range distribution), named exactly like the class.
+   4. ${S.sheet4||'skills analysis (per class and per grade), hardest and easiest questions'}.
+   5. "${S.support}" (priority lists, students by ${U}, excelling students).
+   6. comparison between the classes of each grade, with charts.
+   7. comparison between grade levels${multi?'':' (only if the file has more than one grade)'}.
+   8. detailed insights and recommendations.
+
+2) Word file (.docx) – a short summary report (דוח מסכם), in ${OUT}${skillNote}:
+   The Word file is NOT a copy of the full analysis; it is a short, easy-to-read summary. The full detail lives only in the Excel file.
+
+   Brevity rules:
+   - Start directly with the findings. No introduction, theoretical background or methodology, and do NOT propose a plan or structure for a next exam or a re-assessment exam.
+   - Do not copy the detailed Excel tables into Word (no student scores, no question-by-question analysis, no question-mapping tables).
+   - Insert in Word the same charts as in the Excel file (same data, chart type and colours), as clear images.
+   - Under every chart or summary table add a short box titled (in Hebrew, exactly as written):
+     ${REPORT_INSIGHTS}
+     with 3–4 short bullet points only (one or two lines each), in ${OUT}: what the chart shows and the practical recommendation that follows.
+   - Write directly and concisely, without repetition.
+   - At most 2–3 pages per class, plus a cover page and a one-page overall summary.
+
+   Word structure:
+   1. Cover page: the title "${S.title} – [grade level(s)]", the classes included (with their names from the file), and the date.
+   2. Overall summary, one page: the 5 most important findings, and the colour legend (the ranges and their colours).
+   3. ${multi?'For each grade level, in order: (a) for each class of that grade':'For each class, in order'}:
+      a. A small table of key figures: number of students, class average, and the number of students in each of the ${nb} ranges.
+      b. Range-distribution chart → "${REPORT_INSIGHTS}" box.
+      c. ${S.skillChart||`chart of success rates by ${U}`} → "${REPORT_INSIGHTS}" box.
+      d. ${S.skillTable||`short table of low-achievement ${Us} that need a support plan and mastered ${Us} that need reinforcement`} → "${REPORT_INSIGHTS}" box.
+      e. Names of high-priority students only, in one line or a small table, noting that the full lists are in the "${S.support}" sheet of the Excel file.
+${multi?'      (b) then the comparison between the classes of that grade: comparison charts → a "'+REPORT_INSIGHTS+'" box for each chart.\n   4. Comparison between the grade levels: comparison charts → a "'+REPORT_INSIGHTS+'" box for each chart.':'   4. Comparison between the classes (if there is more than one class): comparison charts → a "'+REPORT_INSIGHTS+'" box for each chart.'}
+   5. General summary and recommendations: one page at most, in bullet points.
+
+   Word formatting:
+   - Page and text direction right-to-left (RTL), clear professional ${AR?'Modern Standard Arabic':'standard Hebrew'}.
+   - A clear ${AR?'Arabic font (e.g. Arial or Simplified Arabic)':'Hebrew font (e.g. David, Arial or Calibri)'} at a size comfortable for reading and printing.
+   - "${REPORT_INSIGHTS}" boxes highlighted with a border or light shading.
+   - The few tables small, neat and coloured according to the legend.
+   - Page numbers.
+   - A subtle footer on EVERY page without exception: small (8–9 pt), light-grey text, not bold, centred, containing exactly the platform name:
+     ${brandOf(S.out)}
+     Put the platform logo very small (about 0.8 cm high) next to the name. The logo is at ${LOGO} ; if you cannot download it, use the text only and do not stop or mention it.
+   - Ready to print and send.
+
+${RULE}
+E. Cross-check: figures the platform calculated from the same file
+${RULE}
+- Students: ${n}, overall average: ${(analytics.average||0).toFixed(1)}
+- Range distribution: ${refDist}
+${refCls}${refBloom?`\n- Achievement by Bloom level: ${refBloom}`:''}
+Your calculations must match these figures. If they differ, rely on the file and explain why in "${S.notes}".
+
+- Check every calculation before presenting it; never estimate a number.
+- Make sure the numbers and charts in the Word file are identical to those in the Excel file.
+- Before delivering, confirm that the footer really appears on every page of the Word file, and that the Hebrew box title "${REPORT_INSIGHTS}" is written correctly.
+
+⚠️ Final reminder: do not ask any question, do not present a plan awaiting approval, and do not stop midway. Complete the whole analysis and deliver the detailed Excel file and the summary Word file together.`;
+}
+
 /* copy the prompt, then open Claude with it pre-filled (the clipboard copy is the fallback) */
 function openInClaude(prompt,onCopied){
   safeCopy(prompt,onCopied||(()=>{}));
@@ -1727,23 +2112,178 @@ const ClaudeExamCard=({prompt,t})=>{
   );
 };
 
-const ClaudeReportCard=({analytics,t,lang,subjectName,teacher})=>{
+const ClaudeReportCard=({analytics,t,lang,subject,subjectName,teacher})=>{
   const [copied,setCopied]=useState(false);
-  if(!analytics.perQuestion||!analytics.perQuestion.length) return null;
-  const prompt=buildClaudeReportPrompt({analytics,lang,subjectName,teacher});
+  const [show,setShow]=useState(false);
+  if(!analytics.perQuestion||!analytics.perQuestion.length||!analytics.bands||!analytics.bands.length) return null;
+  const prompt=buildClaudeReportPrompt({analytics,lang,subject,subjectName,teacher});
   return(
     <div className="rounded-2xl p-5 no-print" style={{background:'linear-gradient(135deg,#fdf6f0,#fff)',border:'2px solid #f3d3c2'}}>
       <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'}}>
         <ClaudeMark size={26}/>
         <h3 style={{fontSize:'1.1rem',fontWeight:900,color:'#7c2d12'}}>{t.reportTitle}</h3>
       </div>
-      <p style={{fontSize:'.88rem',color:'#6b7280',marginBottom:'12px'}}>{t.reportSub}</p>
-      <button onClick={()=>openInClaude(prompt,()=>{setCopied(true);setTimeout(()=>setCopied(false),3000);})}
-        style={{display:'inline-flex',alignItems:'center',gap:'10px',padding:'12px 22px',borderRadius:'14px',border:'none',cursor:'pointer',
-          background:'#D97757',color:'white',fontWeight:800,fontFamily:"'Cairo',sans-serif"}}>
-        ↗ {copied?t.claudeCopied:t.reportBtn}
-      </button>
+      <p style={{fontSize:'.88rem',color:'#6b7280',marginBottom:'12px'}}>{t.reportSub.replace('%S',subjectName)}</p>
+      <ol style={{listStyle:'none',display:'grid',gap:'8px',marginBottom:'14px'}}>
+        {(t.reportSteps||[]).map((st,i)=>(
+          <li key={i} style={{display:'flex',gap:'10px',alignItems:'flex-start',fontSize:'.9rem',color:'#374151'}}>
+            <span style={{flex:'0 0 24px',height:'24px',borderRadius:'50%',background:'#D97757',color:'white',fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.78rem'}}>{i+1}</span>
+            <span style={{paddingTop:'2px'}}>{st}</span>
+          </li>
+        ))}
+      </ol>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'10px'}}>
+        <button onClick={()=>openInClaude(prompt,()=>{setCopied(true);setTimeout(()=>setCopied(false),3000);})}
+          style={{display:'inline-flex',alignItems:'center',gap:'10px',padding:'12px 22px',borderRadius:'14px',border:'none',cursor:'pointer',
+            background:'#D97757',color:'white',fontWeight:800,fontFamily:"'Cairo',sans-serif"}}>
+          ↗ {copied?t.claudeCopied:t.reportBtn}
+        </button>
+        <button onClick={()=>setShow(!show)} style={{padding:'12px 18px',borderRadius:'14px',border:'2px solid #f3d3c2',background:'white',color:'#9a3412',fontWeight:700,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>
+          {show?t.claudeHide:t.claudeShow}
+        </button>
+        {show&&<CopyBtn text={prompt} t={t}/>}
+      </div>
+      {show&&<pre className="bg-white border rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap select-all mt-3"
+        style={{borderColor:'#f3d3c2',direction:'ltr',textAlign:'left',fontFamily:"'Cairo',monospace",maxHeight:'320px',overflow:'auto'}}>{prompt}</pre>}
       <p style={{fontSize:'.76rem',color:'#9ca3af',marginTop:'10px'}}>🔒 {t.reportPrivacy}</p>
+    </div>
+  );
+};
+
+/* ═══════════ BRAND FOOTER (subtle: logo + platform name) ═══════════ */
+const BRAND={ar:'ومضات ذكية مع منى مصطفى',he:'ברקים חכמים עם מונא מוסטפא',en:'Smart Flashes with Mona Mustafa'};
+const brandOf=(lang)=>BRAND[lang]||BRAND.ar;
+/* light grey, small footer on every sheet when printing */
+function addBrandFooter(wb,lang){
+  try{ wb.eachSheet(ws=>{ ws.headerFooter={...(ws.headerFooter||{}),oddFooter:'&C&8&K999999'+brandOf(lang)}; }); }catch(e){}
+}
+let _logoBytes=null;
+async function logoBytes(){
+  if(_logoBytes!==null) return _logoBytes;
+  try{ const r=await fetch(LOGO,{mode:'cors'}); _logoBytes=r.ok?new Uint8Array(await r.arrayBuffer()):false; }catch(e){ _logoBytes=false; }
+  return _logoBytes;
+}
+
+/* ═══════════ TEACHER COMPASS (short, data-driven guidance) ═══════════ */
+function topicStats(analytics){
+  const m={};
+  (analytics.perQuestion||[]).forEach(q=>{
+    const k=String(q.contentSkill||'').trim(); if(!k||!q.max) return;
+    (m[k]=m[k]||{name:k,max:0,got:0}); m[k].max+=q.max; m[k].got+=q.avgPct*q.max/100;
+  });
+  return Object.values(m).map(g=>({name:g.name,avgPct:Math.round(g.got/g.max*1000)/10})).sort((a,b)=>a.avgPct-b.avgPct);
+}
+function compassData(analytics,t,lang){
+  const B=analytics.bands||[], n=analytics.totalStudents||0, G=planGroups(B);
+  const cnt=(idx)=>idx.reduce((a,i)=>a+(analytics.counts[i]||0),0);
+  const fmt=(s,...v)=>v.reduce((x,val,i)=>x.split('%'+(i+1)).join(String(val)),s);
+  const topics=topicStats(analytics);
+  const weak=topics.filter(x=>x.avgPct<75).slice(0,3);
+  const strong=topics.slice().reverse().filter(x=>x.avgPct>=75).slice(0,2);
+  const list=(arr)=>arr.map(x=>`«${x.name}»: ${x.avgPct}%`).join(' | ');
+  const bloom=(analytics.byBloom||[]).slice().sort((a,b)=>a.avgPct-b.avgPct)[0];
+  const hard=(analytics.perQuestion||[]).slice().sort((a,b)=>a.avgPct-b.avgPct).slice(0,3).map(q=>`${q.qNum}${q.contentSkill?` – ${q.contentSkill}`:''}: ${q.avgPct}%`);
+  const cls=(analytics.classes||[]).filter(c=>c.n).slice().sort((a,b)=>b.average-a.average);
+  const situation=[fmt(t.sitAvg,(analytics.average||0).toFixed(1),cnt([0]),n?Math.round(cnt([0])/n*100)+'%':'0%',B[0]?B[0].name:'')];
+  if(weak.length) situation.push(fmt(t.sitWeak,list(weak)));
+  if(strong.length) situation.push(fmt(t.sitStrong,list(strong)));
+  if(bloom) situation.push(fmt(t.sitBloom,bloom.name,bloom.avgPct));
+  if(hard.length) situation.push(fmt(t.sitHard,hard.join(' | ')));
+  if(cls.length>1) situation.push(fmt(t.sitClasses,cls[0].name,cls[0].average,cls[cls.length-1].name,cls[cls.length-1].average));
+  const focus=(k)=>{const w=weak.length?weak:topics.slice(0,2);return w.slice(0,k).map(x=>`«${x.name}»`).join(lang==='en'?' and ':lang==='he'?' ו':' و');};
+  const steps=[];
+  if(topics.length) steps.push(fmt(t.stepWhole,topics[0].name,topics[0].avgPct));
+  if(cnt(G.intensive)) steps.push(fmt(t.stepIntensive,cnt(G.intensive),focus(2)||'—'));
+  if(cnt(G.strategic)) steps.push(fmt(t.stepStrategic,cnt(G.strategic),focus(3)||'—'));
+  if(cnt(G.enrich)) steps.push(fmt(t.stepEnrich,cnt(G.enrich)));
+  steps.push(t.stepReassess);
+  /* RTL: keep "(45.6%)" intact next to Arabic/Hebrew text in Word and PDF */
+  const fix=(x)=>lang==='en'?x:x.replace(/\(([^()]*)\)/g,'\u200F(\u2060$1\u2060)\u200F');
+  return {situation:situation.map(fix),steps:steps.map(fix)};
+}
+
+/* ═══════════ COMPARE SEVERAL PLATFORM FILES ═══════════ */
+const CompareFiles=({analytics,t,onError})=>{
+  const [sets,setSets]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const canvasRef=useRef(null), chartRef=useRef(null);
+  const B=analytics.bands;
+  const all=[{label:t.currentFile,a:analytics},...sets];
+  const distPct=(a)=>{const d=buildDist(a.scores||[],B);const n=(a.scores||[]).length;return d.map(c=>n?Math.round(c/n*1000)/10:0);};
+  const addFiles=async(e)=>{
+    const files=[...(e.target.files||[])]; e.target.value='';
+    if(!files.length) return;
+    if(typeof ExcelJS==='undefined'){onError(t.excelLibErr);return;}
+    setBusy(true);
+    const add=[];
+    for(const f of files){
+      try{
+        const res=await readScreeningWorkbook(ExcelJS,await f.arrayBuffer());
+        if(!res.students.length) continue;
+        add.push({label:f.name.replace(/\.xlsx$/i,''),a:analyticsFromWorkbook(res,res.bands||B)});
+      }catch(err){ console.error(err); onError(t.uploadErr+'\n\n'+f.name); }
+    }
+    setSets(s=>[...s,...add]); setBusy(false);
+  };
+  const COLORS=['#2563eb','#f97316','#16a34a','#9333ea','#db2777','#0891b2','#ca8a04'];
+  useEffect(()=>{
+    if(!canvasRef.current||!sets.length) return;
+    if(chartRef.current) chartRef.current.destroy();
+    chartRef.current=new Chart(canvasRef.current.getContext('2d'),{
+      type:'bar',
+      data:{labels:B.map(b=>b.name),datasets:all.map((x,i)=>({label:x.label,data:distPct(x.a),backgroundColor:COLORS[i%COLORS.length],borderRadius:6}))},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{family:'Cairo'}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}}
+    });
+    return ()=>{ if(chartRef.current){chartRef.current.destroy();chartRef.current=null;} };
+  },[sets,analytics]);
+  const bloomNames=[...new Set(all.flatMap(x=>(x.a.byBloom||[]).map(g=>g.name)))];
+  const th={border:'1px solid #dbeafe',padding:'8px',background:'#eff6ff',fontWeight:700};
+  const td={border:'1px solid #e5e7eb',padding:'8px',textAlign:'center'};
+  return(
+    <div className="p-5 bg-blue-50 border border-blue-200 rounded-2xl fade-in no-print">
+      <h3 className="font-bold text-blue-700 mb-2">{t.compareTitle}</h3>
+      <p style={{fontSize:'.85rem',color:'#475569',marginBottom:'12px'}}>{t.compareHint2}</p>
+      <label style={{display:'inline-block',padding:'10px 22px',borderRadius:'12px',background:'#2563eb',color:'white',fontWeight:800,cursor:'pointer'}}>
+        {busy?'⏳':t.compareUpload}
+        <input type="file" accept=".xlsx" multiple onChange={addFiles} style={{display:'none'}}/>
+      </label>
+      {sets.length>0&&(
+        <div className="mt-4 space-y-4">
+          <div className="h-64 bg-white rounded-xl border p-3"><canvas ref={canvasRef}></canvas></div>
+          <p style={{fontSize:'.75rem',color:'#64748b'}}>{t.cmpPctNote}</p>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.83rem',background:'white'}}>
+              <thead><tr>
+                <th style={th}>{t.fileCol}</th><th style={th}>{t.classesCol}</th><th style={th}>{t.nCol}</th><th style={th}>{t.avgCol}</th>
+                {B.map((b,i)=><th key={i} style={{...th,color:bandColor(B,i)}}>{b.name}</th>)}<th style={th}></th>
+              </tr></thead>
+              <tbody>{all.map((x,k)=>(
+                <tr key={k}>
+                  <td style={{...td,fontWeight:700,color:COLORS[k%COLORS.length]}}>{x.label}</td>
+                  <td style={td}>{(x.a.classes||[]).map(c=>c.name).join('، ')}</td>
+                  <td style={td}>{x.a.totalStudents}</td>
+                  <td style={{...td,fontWeight:800}}>{(x.a.average||0).toFixed(1)}</td>
+                  {distPct(x.a).map((v,i)=><td key={i} style={{...td,background:'#'+bandSoft(B,i)}}>{v}%</td>)}
+                  <td style={td}>{k>0&&<button onClick={()=>setSets(s=>s.filter((_,j)=>j!==k-1))} style={{color:'#dc2626',fontWeight:700,cursor:'pointer'}}>✕ {t.removeFile}</button>}</td>
+                </tr>))}
+              </tbody>
+            </table>
+          </div>
+          {bloomNames.length>0&&(
+            <div style={{overflowX:'auto'}}>
+              <div style={{fontWeight:800,color:'#1e3a5f',margin:'6px 0'}}>{t.bloomCmp}</div>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.83rem',background:'white'}}>
+                <thead><tr><th style={th}>{t.fileCol}</th>{bloomNames.map(b=><th key={b} style={th}>{b}</th>)}</tr></thead>
+                <tbody>{all.map((x,k)=>(
+                  <tr key={k}><td style={{...td,fontWeight:700,color:COLORS[k%COLORS.length]}}>{x.label}</td>
+                    {bloomNames.map(b=>{const g=(x.a.byBloom||[]).find(y=>y.name===b);return <td key={b} style={td}>{g?g.avgPct+'%':'—'}</td>;})}
+                  </tr>))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1859,7 +2399,7 @@ const TablePreview=({data,t,lang})=>{
           <thead>
             <tr>
               <th style={{background:'#1e3a5f',color:'white'}}>#</th>
-              <th style={{background:'#1e3a5f',color:'white'}}>Section</th>
+              <th style={{background:'#1e3a5f',color:'white'}}>{t.colSection||'Section'}</th>
               <th style={{background:'#7c3aed',color:'white'}}>{hBloom}</th>
               <th style={{background:'#0f766e',color:'white'}}>{hContent}</th>
               <th style={{background:'#dc2626',color:'white'}}>{hScore}</th>
@@ -1904,50 +2444,61 @@ const MotivBanner=({analytics,t})=>{
   return <div className="motiv-banner" style={{color,background:bg}}>💡 {msg}</div>;
 };
 
-function doExportDocx(data){
-  const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,AlignmentType,HeadingLevel}=docx;
-  const t=data.t;
-  const mp=(txt)=>new Paragraph({children:[new TextRun({text:String(txt),size:22})]});
-  const mh=(txt,c)=>new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:txt,bold:true,size:28,color:c||'1d4ed8'})]});
+async function doExportDocx(data){
+  const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,AlignmentType,HeadingLevel,Footer,ImageRun}=docx;
+  const t=data.t, lang=data.lang||'ar', rtl=lang!=='en';
+  const run=(o)=>new TextRun({rightToLeft:rtl,...o});
+  const P=(o)=>new Paragraph({bidirectional:rtl,...o});
+  const mp=(txt)=>P({children:[run({text:String(txt),size:22})]});
+  const mb=(txt)=>P({bullet:{level:0},children:[run({text:String(txt),size:22})]});
+  const mh=(txt,c)=>P({heading:HeadingLevel.HEADING_2,children:[run({text:txt,bold:true,size:28,color:c||'1d4ed8'})]});
   const mc=(txt,bold,fill)=>new TableCell({
     shading:fill?{fill}:undefined,
-    children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:String(txt),bold:!!bold,size:20})]})]
+    children:[P({alignment:AlignmentType.CENTER,children:[run({text:String(txt),bold:!!bold,size:20})]})]
   });
   const B=data.analytics.bands, G=planGroups(B);
   const gl=(k,base)=>base+' ('+G[k].map(i=>B[i].name).join(' / ')+')';
-  const doc2=new Document({sections:[{properties:{},children:[
-    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.mainTitle,bold:true,size:44,color:'ea580c'})]}),
-    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.mainSub,size:26,color:'92400e'})]}),
-    new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:t.planTitle,size:28,bold:true})]}),
-    new Paragraph({}),
-    mh('1. '+t.distSection),
-    mp(t.totalStudents+': '+data.analytics.totalStudents),
-    ...data.analytics.bands.map((b,i)=>mp(`${b.name} (${bandRangeLabel(data.analytics.bands,i)}): ${data.analytics.counts[i]}`)),
-    mp(t.avgLabel+': '+data.analytics.average.toFixed(1)),
-    new Paragraph({}),
-    mh('2. '+t.timeframe,'7c3aed'),
-    mp(t.workPeriod+': '+(data.plan.period||t.notSet)),
-    mp(t.weeklyHours+': '+(data.plan.hours||t.notSet)),
-    mp(t.evalMethod+': '+(data.plan.assessment||t.notSet)),
-    mp(t.reEvalDate+': '+(data.plan.reEvalDate||t.notSet)),
-    mp(t.availableRes+': '+(data.plan.resources||t.notSet)),
-    new Paragraph({}),
-    mh('3. '+t.strategiesTitle,'ea580c'),
-    new Table({width:{size:100,type:WidthType.PERCENTAGE},rows:[
+  const C=compassData(data.analytics,t,lang);
+  const logo=await logoBytes();
+  const footKids=[];
+  if(logo){ try{ footKids.push(new ImageRun({data:logo,transformation:{width:16,height:16}})); footKids.push(run({text:'  '})); }catch(e){} }
+  footKids.push(run({text:brandOf(lang),size:16,color:'9CA3AF'}));
+  const doc2=new Document({sections:[{properties:{},
+    footers:{default:new Footer({children:[P({alignment:AlignmentType.CENTER,children:footKids})]})},
+    children:[
+    P({alignment:AlignmentType.CENTER,children:[run({text:t.planTitle,bold:true,size:36,color:'ea580c'})]}),
+    P({alignment:AlignmentType.CENTER,children:[run({text:[data.teacher.grade,data.subjectName,data.teacher.date,data.teacher.name].filter(Boolean).join(' — '),size:22,color:'6b7280'})]}),
+    P({}),
+    mh('1. '+t.situationTitle,'0f766e'),
+    ...C.situation.map(mb),
+    P({}),
+    mh('2. '+t.startTitle,'ea580c'),
+    ...C.steps.map(mb),
+    P({}),
+    mh('3. '+t.distSection),
+    mp(t.totalStudents+': '+data.analytics.totalStudents+'   •   '+t.avgLabel+': '+data.analytics.average.toFixed(1)),
+    ...B.map((b,i)=>mb(`${b.name} (${bandRangeLabel(B,i)}): ${data.analytics.counts[i]}`)),
+    P({}),
+    mh('4. '+t.timeframe,'7c3aed'),
+    mb(t.workPeriod+': '+(data.plan.period||t.notSet)),
+    mb(t.weeklyHours+': '+(data.plan.hours||t.notSet)),
+    mb(t.evalMethod+': '+(data.plan.assessment||t.notSet)),
+    mb(t.reEvalDate+': '+(data.plan.reEvalDate||t.notSet)),
+    mb(t.availableRes+': '+(data.plan.resources||t.notSet)),
+    P({}),
+    mh('5. '+t.strategiesTitle,'ea580c'),
+    new Table({width:{size:100,type:WidthType.PERCENTAGE},visuallyRightToLeft:rtl,rows:[
       new TableRow({children:[mc(t.groupTarget,true,'dbeafe'),mc(t.strategy,true,'dbeafe')]}),
       new TableRow({children:[mc(gl('intensive',t.intensiveGroup),true,'fee2e2'),mc(t.intensiveStr)]}),
       new TableRow({children:[mc(gl('strategic',t.strategicGroup),true,'fef9c3'),mc(t.strategicStr)]}),
       new TableRow({children:[mc(gl('enrich',t.enrichGroup),true,'dcfce7'),mc(t.enrichStr)]}),
     ]}),
-    new Paragraph({}),
-    mp(t.mainTitle+' — '+new Date().toLocaleDateString()),
   ]}]});
-  Packer.toBlob(doc2).then(blob=>{
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='plan_'+(data.teacher.grade||'class')+'.docx';
-    a.click();
-  });
+  const blob=await Packer.toBlob(doc2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='compass_'+(data.teacher.grade||'class')+'.docx';
+  a.click();
 }
 
 function doExportPDF(){
@@ -2045,8 +2596,6 @@ const App=()=>{
   const [showPlan,setShowPlan]=useState(false);
   const [savedMsg,setSavedMsg]=useState(false);
   const [showCompare,setShowCompare]=useState(false);
-  const [compareRaw,setCompareRaw]=useState('');
-  const [compareAna,setCompareAna]=useState(null);
   const [bands,setBands]=useState(()=>presetBands('ar',4));
   const [nStudents,setNStudents]=useState(35);
   const [classes,setClasses]=useState([]);
@@ -2174,23 +2723,6 @@ const App=()=>{
     }
   },[phase,analytics]);
 
-  useEffect(()=>{
-    if(compareAna&&analytics&&cmpCanvasRef.current){
-      if(cmpChartRef.current) cmpChartRef.current.destroy();
-      const B=analytics.bands;
-      cmpChartRef.current=new Chart(cmpCanvasRef.current.getContext('2d'),{
-        type:'bar',
-        data:{
-          labels:B.map(b=>b.name),
-          datasets:[
-            {label:t.exam1,data:analytics.counts,backgroundColor:'rgba(59,130,246,.7)',borderRadius:6},
-            {label:t.exam2,data:buildDist(compareAna.scores,B),backgroundColor:'rgba(249,115,22,.7)',borderRadius:6}
-          ]
-        },
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
-      });
-    }
-  },[compareAna]);
 
   // keep the draft in sync whenever results or ranges change (avoids saving stale state)
   useEffect(()=>{
@@ -2248,21 +2780,6 @@ const App=()=>{
       console.error(err);
       setModalMsg(t.uploadErr);
     }finally{setBusy(false);}
-  };
-
-  const analyzeData=()=>{
-    const scores=parseScores(gradesRaw);
-    if(!scores.length){setModalMsg(t.noData);return;}
-    const be=validateBands(bands);
-    if(be){setModalMsg(t.bandErr[be]);return;}
-    setAnalytics({scores,counts:buildDist(scores,bands),bands:bands.map(b=>({...b})),totalStudents:scores.length,average:avg(scores)});
-    setPhase(3);handleSave();
-  };
-
-  const doCompare=()=>{
-    const sc=parseScores(compareRaw);
-    if(!sc.length){setModalMsg(t.noData);return;}
-    setCompareAna({scores:sc,totalStudents:sc.length,average:avg(sc)});
   };
 
   const exportLists=()=>{
@@ -2465,28 +2982,19 @@ const App=()=>{
               <button onClick={generateExcel} disabled={busy} className="glow-teal w-full bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold text-lg py-4 rounded-2xl cursor-pointer" style={{opacity:busy?.6:1}}>
                 {busy?`⏳ ${t.excelBuilding}`:`📊 ${t.generateExcel}`}
               </button>
-              {excelMade&&parsedQ.length>0&&(
-                <div className="mt-2 p-5 rounded-2xl bg-amber-50 border border-amber-200 fade-in">
-                  <p style={{fontSize:"1rem",fontWeight:700,color:"#92400e",marginBottom:"12px"}}>✅ {t.excelOk}</p>
-                  <div style={{background:'white',border:'2px dashed #f59e0b',borderRadius:'14px',padding:'16px',textAlign:'center',marginBottom:'16px'}}>
-                    <div style={{fontWeight:800,color:'#1e3a5f',marginBottom:'4px'}}>{t.uploadTitle}</div>
-                    <div style={{fontSize:'.85rem',color:'#6b7280',marginBottom:'10px'}}>{t.uploadHint}</div>
-                    <label style={{display:'inline-block',padding:'12px 26px',borderRadius:'14px',background:'linear-gradient(135deg,#7c3aed,#db2777)',color:'white',fontWeight:800,cursor:'pointer'}}>
-                      {busy?'⏳':t.uploadBtn}
-                      <input type="file" accept=".xlsx" onChange={handleUpload} style={{display:'none'}}/>
-                    </label>
-                  </div>
-                  <label style={{display:"block",fontSize:".95rem",fontWeight:700,color:"#374151",marginBottom:"8px"}}>{t.orPaste}</label>
-                  <textarea rows="5" value={gradesRaw} onChange={e=>setGradesRaw(e.target.value)}
-                    style={{width:"100%",padding:"14px 16px",borderRadius:"14px",border:"2px solid #fcd34d",outline:"none",fontFamily:"monospace",fontSize:"1rem",background:"white",direction:"ltr",textAlign:"left"}}/>
-                  <button onClick={analyzeData} className="glow-purple mt-3 w-full bg-gradient-to-r from-violet-500 to-pink-500 text-white font-bold py-3 rounded-2xl cursor-pointer">
-                    📈 {t.analyzeBtn}
-                  </button>
+              <div className="mt-2 p-5 rounded-2xl bg-amber-50 border border-amber-200 fade-in">
+                {excelMade&&parsedQ.length>0&&<p style={{fontSize:"1rem",fontWeight:700,color:"#92400e",marginBottom:"12px"}}>✅ {t.excelOk}</p>}
+                <div style={{background:'white',border:'2px dashed #f59e0b',borderRadius:'14px',padding:'16px',textAlign:'center'}}>
+                  <div style={{fontWeight:800,color:'#1e3a5f',marginBottom:'4px'}}>{t.uploadTitle}</div>
+                  <div style={{fontSize:'.85rem',color:'#6b7280',marginBottom:'10px'}}>{excelMade&&parsedQ.length>0?t.uploadHint:t.uploadAnyTime}</div>
+                  <label style={{display:'inline-block',padding:'12px 26px',borderRadius:'14px',background:'linear-gradient(135deg,#7c3aed,#db2777)',color:'white',fontWeight:800,cursor:'pointer'}}>
+                    {busy?'⏳':t.uploadBtn}
+                    <input type="file" accept=".xlsx" onChange={handleUpload} style={{display:'none'}}/>
+                  </label>
                 </div>
-              )}
+              </div>
             </div>
           )}
-
           {/* ── Phase 3: Analysis + Plan ── */}
           {phase===3&&analytics&&(
             <div className="fade-in space-y-8">
@@ -2519,7 +3027,7 @@ const App=()=>{
                 </div>
               </div>
               <DeepAnalysis analytics={analytics} t={t}/>
-              <ClaudeReportCard analytics={analytics} t={t} lang={lang||'ar'} subjectName={t.subjects[subject]||''} teacher={teacher}/>
+              <ClaudeReportCard analytics={analytics} t={t} lang={lang||'ar'} subject={subject} subjectName={t.subjects[subject]||''} teacher={teacher}/>
               <div className="flex flex-wrap gap-3 no-print">
                 <button onClick={exportLists} className="glow-teal px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold cursor-pointer">
                   📋 {t.exportList}
@@ -2528,35 +3036,11 @@ const App=()=>{
                   🔄 {t.compareBtn}
                 </button>
               </div>
-              {showCompare&&(
-                <div className="p-5 bg-blue-50 border border-blue-200 rounded-2xl fade-in no-print">
-                  <h3 className="font-bold text-blue-700 mb-3">{t.compareTitle}</h3>
-                  <textarea rows="5" value={compareRaw} onChange={e=>setCompareRaw(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-blue-200 outline-none text-sm font-mono mb-3"
-                    placeholder={t.compareHint} style={{direction:'ltr',textAlign:'left'}}/>
-                  <button onClick={doCompare} className="glow-blue px-6 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm cursor-pointer">{t.analyzeBtn}</button>
-                  {compareAna&&(
-                    <div className="mt-4">
-                      <div className="h-52 bg-white rounded-xl border p-3"><canvas ref={cmpCanvasRef}></canvas></div>
-                      <div className="grid grid-cols-2 gap-3 mt-3 text-sm">
-                        <div className="bg-blue-100 rounded-xl p-3 text-center">
-                          <div className="font-bold text-blue-700">{t.exam1}</div>
-                          <div className="text-2xl font-black text-blue-900">{analytics.average.toFixed(1)}</div>
-                          <div className="text-xs text-blue-500">{t.avgLabel}</div>
-                        </div>
-                        <div className="bg-orange-100 rounded-xl p-3 text-center">
-                          <div className="font-bold text-orange-700">{t.exam2}</div>
-                          <div className="text-2xl font-black text-orange-900">{compareAna.average.toFixed(1)}</div>
-                          <div className="text-xs text-orange-500">{t.avgLabel}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              {showCompare&&<CompareFiles analytics={analytics} t={t} onError={setModalMsg}/>}
               {!showPlan&&(
                 <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-6 space-y-4 no-print">
                   <h3 style={{fontSize:"1.4rem",fontWeight:800,color:"#1e3a5f",marginBottom:"4px"}}>{t.interventionTitle}</h3>
+                  <p style={{fontSize:'.88rem',color:'#6b7280',marginTop:'-6px'}}>{t.compassHint}</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[['resources',t.resources,t.resourcesHint,'text','md:col-span-2'],['period',t.period,t.periodHint,'text',''],['hours',t.hours,t.hoursHint,'text',''],['assessment',t.assessment,t.assessmentHint,'text',''],['reEvalDate',t.reEval,'','date','']].map(([k,lbl,ph,type,ex])=>(
                       <div key={k} className={ex}>
@@ -2580,7 +3064,7 @@ const App=()=>{
                     <button onClick={()=>setShowPlan(false)} style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'10px 22px',borderRadius:'14px',background:'linear-gradient(135deg,#1e3a5f,#0f2749)',color:'white',fontWeight:700,fontSize:'1rem',border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(15,39,73,.35)'}}>
                       <span>{dir==='rtl'?'→':'←'}</span> {t.back}
                     </button>
-                    <button onClick={()=>doExportDocx({t,analytics,plan,teacher})} className="glow-blue px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold cursor-pointer">📄 {t.downloadDocx}</button>
+                    <button onClick={()=>doExportDocx({t,analytics,plan,teacher,lang:lang||'ar',subjectName:t.subjects[subject]||''}).catch(e=>{console.error(e);setModalMsg(String(e&&e.message||e));})} className="glow-blue px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold cursor-pointer">📄 {t.downloadDocx}</button>
                     <button onClick={doExportPDF} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition cursor-pointer">📑 {t.downloadPdf}</button>
                     <button onClick={()=>window.print()} className="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-bold hover:bg-gray-700 transition cursor-pointer">🖨️ {t.print}</button>
                   </div>
@@ -2592,8 +3076,18 @@ const App=()=>{
                     <div style={{fontSize:'.78rem',color:'#6b7280',marginTop:'4px'}}>{teacher.grade} — {t.subjects[subject]} — {teacher.date}</div>
                     <div style={{fontSize:'.73rem',color:'#9ca3af'}}>{teacher.name}</div>
                   </div>
+                  {(()=>{const C=compassData(analytics,t,lang||'ar');return(<>
+                    <section>
+                      <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#0f766e',borderBottom:'2px solid #ccfbf1',paddingBottom:'6px',marginBottom:'10px'}}>1. {t.situationTitle}</h3>
+                      <ul style={{display:'grid',gap:'6px',fontSize:'.9rem',color:'#1f2937',paddingInlineStart:'20px',listStyle:'disc'}}>{C.situation.map((x,i)=><li key={i}>{x}</li>)}</ul>
+                    </section>
+                    <section>
+                      <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#ea580c',borderBottom:'2px solid #fed7aa',paddingBottom:'6px',marginBottom:'10px'}}>2. {t.startTitle}</h3>
+                      <ol style={{display:'grid',gap:'6px',fontSize:'.9rem',color:'#1f2937',paddingInlineStart:'20px',listStyle:'decimal'}}>{C.steps.map((x,i)=><li key={i}>{x}</li>)}</ol>
+                    </section>
+                  </>);})()}
                   <section>
-                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#1d4ed8',borderBottom:'2px solid #dbeafe',paddingBottom:'6px',marginBottom:'10px'}}>1. {t.distSection}</h3>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#1d4ed8',borderBottom:'2px solid #dbeafe',paddingBottom:'6px',marginBottom:'10px'}}>3. {t.distSection}</h3>
                     <ul style={{listStyle:'none',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',fontSize:'.88rem'}}>
                       {[['📊 '+t.totalStudents,analytics.totalStudents,'#374151'],...analytics.bands.map((b,k)=>[`● ${b.name} (${bandRangeLabel(analytics.bands,k)})`,analytics.counts[k],bandColor(analytics.bands,k)]),['📈 '+t.avgLabel,analytics.average.toFixed(1),'#374151']].map(([lbl,val,c])=>(
                         <li key={lbl} style={{background:'#f9fafb',borderRadius:'10px',padding:'8px 12px',color:c}}><strong>{lbl}:</strong> {val}</li>
@@ -2601,7 +3095,7 @@ const App=()=>{
                     </ul>
                   </section>
                   <section>
-                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#7c3aed',borderBottom:'2px solid #ede9fe',paddingBottom:'6px',marginBottom:'10px'}}>2. {t.timeframe}</h3>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#7c3aed',borderBottom:'2px solid #ede9fe',paddingBottom:'6px',marginBottom:'10px'}}>4. {t.timeframe}</h3>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',fontSize:'.85rem'}}>
                       {[[t.workPeriod,plan.period||t.notSet],[t.weeklyHours,plan.hours||t.notSet],[t.evalMethod,plan.assessment||t.notSet],[t.reEvalDate,plan.reEvalDate||t.notSet],[t.availableRes,plan.resources||t.notSet]].map(([k,v])=>(
                         <div key={k} style={{background:'#faf5ff',borderRadius:'10px',padding:'10px 12px',border:'1px solid #ede9fe'}}>
@@ -2612,7 +3106,7 @@ const App=()=>{
                     </div>
                   </section>
                   <section>
-                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#ea580c',borderBottom:'2px solid #fed7aa',paddingBottom:'6px',marginBottom:'10px'}}>3. {t.strategiesTitle}</h3>
+                    <h3 style={{fontSize:'1.05rem',fontWeight:700,color:'#ea580c',borderBottom:'2px solid #fed7aa',paddingBottom:'6px',marginBottom:'10px'}}>5. {t.strategiesTitle}</h3>
                     <div style={{overflowX:'auto'}}>
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.83rem'}}>
                         <thead>
@@ -2632,7 +3126,7 @@ const App=()=>{
                       </table>
                     </div>
                   </section>
-                  <p style={{fontSize:'.72rem',color:'#9ca3af',textAlign:'center',paddingTop:'8px'}}>{t.mainTitle} — {new Date().toLocaleDateString()}</p>
+                  <p style={{fontSize:'.72rem',color:'#9ca3af',textAlign:'center',paddingTop:'8px',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px'}}><img src={LOGO} alt="" style={{width:'16px',height:'16px',borderRadius:'4px'}} onError={e=>e.target.style.display='none'}/>{brandOf(lang||'ar')} — {new Date().toLocaleDateString()}</p>
                 </div>
               )}
             </div>
