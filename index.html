@@ -1893,8 +1893,150 @@ const REPORT_SUBJECTS={
   }
 };
 
+/* ── School stage: elementary (grades 1–6) or middle school (grades 7–9) ──
+   Detected from the grade field and the class-sheet names. Only when EVERY detected grade is
+   elementary does the prompt switch to the elementary version; otherwise (middle school, mixed or
+   unknown) the middle-school prompt is used exactly as before. */
+function gradeNumber(token){
+  let s=String(token||'').trim().toLowerCase()
+    .replace(/[׳'"״]/g,'').replace(/^(الصف|صف|כיתה|class|grade)\s*/,'').replace(/^ال/,'').trim();
+  if(!s) return null;
+  const n=s.match(/^(\d{1,2})\b/); if(n) return Number(n[1]);
+  const AR={'اول':1,'أول':1,'ثاني':2,'ثالث':3,'رابع':4,'خامس':5,'سادس':6,'سابع':7,'ثامن':8,'تاسع':9,'عاشر':10};
+  const w=s.split(/\s+/)[0]; if(AR[w]) return AR[w];
+  const HE={'א':1,'ב':2,'ג':3,'ד':4,'ה':5,'ו':6,'ז':7,'ח':8,'ט':9,'י':10,'יא':11,'יב':12};
+  if(HE[w]) return HE[w];
+  return null;
+}
+function detectStage(teacher,classNames){
+  const grades=[gradeNumber(teacher&&teacher.grade),...(classNames||[]).map(c=>gradeNumber(gradeOfClass(c)))].filter(x=>x!==null);
+  if(grades.length&&grades.every(g=>g>=1&&g<=6)) return 'elem';
+  return 'mid';
+}
+
+const REPORT_ELEM={
+  arabic:{
+    expert:'an expert in educational assessment and educational data analysis, specialising in teaching Arabic language in elementary school (grades 4 ד, 5 ה, 6 ו, and the lower grades) in Arab schools in Israel, and familiar with the language-skill frameworks of the Arabic curriculum for these ages',
+    skills:`2) Map every question to the language skill(s) commonly used in Arabic-language teaching in elementary school, taking into account the expected level of each grade. For example (use the Arabic term in the outputs):
+   • Reading (القراءة):
+     - Decoding and reading accuracy (فك الرموز والقراءة الصحيحة), reading fluency (الطلاقة القرائية).
+     - Literal comprehension (الفهم الحرفي): explicit details, characters, place and time, sequence of events (ترتيب الأحداث).
+     - Simple inference (الاستنتاج البسيط): reasons, feelings of characters, what happens next.
+     - Main idea and giving a title (الفكرة الرئيسية ووضع عنوان).
+     - Giving an opinion with a simple reason (إبداء الرأي مع تعليل بسيط).
+   • Vocabulary (المفردات): meaning from context, synonyms and antonyms, word families.
+   • Spelling (الإملاء): التاء المربوطة والمفتوحة، اللام الشمسية والقمرية، الهمزة في مواضعها البسيطة، المدود، الألف الفارقة... as suits each grade.
+   • Basic grammar and language structure (التراكيب اللغوية): nominal and verbal sentence, singular/dual/plural, masculine/feminine, pronouns, simple tenses – at the level of each grade.
+   • Written expression (التعبير الكتابي): writing a correct sentence, a short paragraph, ordering events, basic punctuation, handwriting and neatness.
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← maximum score.
+
+4) If a question's classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping. Always keep the topic name as written in the file and add the standard pedagogical term next to it.`,
+    skillExtra:'   - Compare the reading levels (decoding and literal comprehension ← simple inference ← opinion and evaluation) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every low skill with age-appropriate strategies – short daily practice, reading aloud and paired reading, educational games, visual and concrete aids – work groups and a timetable, and reinforcement of mastered skills)',
+    lowTreat:'(a remedial plan focused on decoding, fluency and spelling, in short frequent sessions)',
+    topEnrich:'(enrichment reading, creative writing and peer tutoring)',
+    team:'for the Arabic-language staff',
+    mgmt:'and for the school management and for parents (simple reading and spelling activities at home)'
+  },
+  hebrew:{
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching Hebrew as a second language in elementary schools (grades ג–ו) in Arab schools in Israel, and familiar with the Hebrew curriculum for beginners and the skills tested in class screenings',
+    skills:`2) Map every question, by its topic, to the matching skill of the Hebrew curriculum for Arabic-speaking elementary schools, taking into account the expected level of each grade. For example (use the Hebrew curriculum term in the outputs):
+   • Basic reading (קריאה): decoding (פענוח), reading with and without vowel signs (ניקוד), reading words and short sentences fluently.
+   • Reading comprehension (הבנת הנקרא) of short texts: locating explicit information (איתור מידע גלוי), simple inference (הסקה פשוטה), main idea and title, sequence.
+   • Vocabulary (אוצר מילים) by themes (school, family, food, body, time...): meaning from context or picture, opposites, word families.
+   • Basic language structure (מבנה הלשון): gender and number agreement, personal pronouns, present and past tense of common verbs, prepositions (ב, ל, עם), question words.
+   • Writing (כתיבה): copying and writing words, completing and writing simple sentences, a few connected sentences.
+   • Spelling (כתיב) of common words.
+   • Listening comprehension (הבנת הנשמע), if the screening includes it.
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← maximum score.
+
+4) If a question's classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping. Always keep the topic name as written in the file and add the standard curriculum term next to it.`,
+    skillExtra:'   - Compare decoding and vocabulary with reading comprehension, and state whether the difficulty starts at the word level or at the text level.',
+    recos:'for the teacher (a support plan for every weak skill with age-appropriate strategies – songs, games, picture cards, short daily vocabulary practice, reading in pairs – group work and a suggested timetable, and reinforcement of mastered skills)',
+    lowTreat:'(a remedial plan focused on decoding and core vocabulary, in short frequent sessions)',
+    topEnrich:'(enrichment reading, games and peer tutoring)',
+    team:'for the school\'s Hebrew staff',
+    mgmt:'and for the school management and for parents (exposure to Hebrew at home: songs, simple books)'
+  },
+  english:{
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching English as a foreign language (EFL) in elementary schools (grades ג–ו) in Arab schools in Israel, and familiar with the English curriculum for the Foundation level and the skills tested in class screenings',
+    skills:`2) The skills appear in the file in the question-topic row (e.g. Phonics, Vocabulary, Reading Comprehension). Use them as they are, with their original English names, and assign each question to the skill the file gives it. Do not invent new skills and do not change the existing classification.
+
+3) Only if a question has no skill defined in the file, assign it by its content to the most suitable skill already appearing in the file. If none fits, use a suitable skill from the elementary English curriculum (e.g. Phonics and Decoding, Sight Words, Vocabulary, Reading Comprehension, Basic Grammar, Writing, Listening Comprehension), in English, and record this in the notes sheet.
+
+4) If the file also has sub-skills (e.g. Letter-Sound Correspondence, Word Recognition, Literal Understanding, Plurals, Verb "to be"), use them as a second level of analysis, also in English.
+
+5) For each grade, build a table linking: question number ← skill ← sub-skill (if any) ← Bloom level as in the file ← maximum score.`,
+    causeEx:', and explain pedagogically the likely cause of difficulty, bearing in mind that these are young beginners in English as a foreign language (decoding, limited vocabulary, unfamiliar instructions).',
+    skillExtra:'   - Compare decoding and vocabulary with reading comprehension and writing, and state whether the difficulty starts at the letter/word level or at the text level.',
+    recos:'for the teacher (a support plan for every weak skill with age-appropriate strategies, e.g. in Phonics: daily letter-sound practice, blending games and decodable texts; in Vocabulary: picture cards, songs, total physical response and spaced repetition; in Reading Comprehension: reading in pairs and picture-supported questions; in Writing: copying, sentence frames and guided writing – group work and a suggested timetable, and reinforcement of mastered skills)',
+    lowTreat:'(a remedial plan focused on phonics and core vocabulary, in short frequent sessions)',
+    topEnrich:'(graded readers, enrichment and peer tutoring)',
+    team:'for the school\'s English staff',
+    mgmt:'and for the school management and for parents (simple English songs, games and books at home)'
+  },
+  science:{
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching Science and Technology in elementary schools (grades ג–ו) in Arab schools in Israel, and familiar with the elementary Science and Technology curriculum, the מיצ"ב tests and the basic inquiry skills tested at this age',
+    skills:`2) Classify every question, by its topic and by what it requires from the student, into the matching skill from those used in elementary Science and Technology tests in Arab schools in Israel, taking into account the expected level of each grade. For example (use the Hebrew term in the outputs):
+   • Basic inquiry skills (מיומנויות חקר בסיסיות): observation and description; comparison and classification; asking a question; making a prediction; a simple fair test (what we change, what we measure); measuring with simple instruments; drawing a simple conclusion.
+   • Reading and representing data (קריאה וייצוג נתונים): reading a simple table, bar chart or picture graph; completing a table; comparing data.
+   • Understanding a scientific text (הבנת טקסט מדעי): explicit information, simple inference, understanding pictures and diagrams.
+   • Scientific knowledge and understanding (ידע והבנה מדעיים): facts and concepts; explaining a phenomenon in simple words (cause and effect); applying knowledge to everyday situations.
+   • Technology and design (טכנולוגיה ותיכון): a need and a simple product, materials and their properties for a purpose.
+   • Explaining in writing (הסבר בכתב): a full, reasoned answer using scientific words.
+
+3) In addition to the skill, classify each question by its content domain (e.g. living things and their environment, the human body and health, materials and states of matter, energy – light, heat, sound, earth and space, or any other domain in the file).
+
+4) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← main skill ← sub-skill ← content domain ← maximum score.
+
+5) Always keep the topic as written in the file and add the matching skill from the list above next to it. If a classification is unclear or fits more than one skill, choose the most suitable one and justify it briefly, without stopping.`,
+    causeEx:', and explain pedagogically the likely cause of difficulty (e.g. difficulty in the skill itself, in reading and understanding the question, or a gap in content knowledge).',
+    skillExtra:'   - Check whether the difficulty stems mainly from inquiry and data skills or from content knowledge, and show this clearly.',
+    recos:'for the teacher (a support plan for every weak skill with age-appropriate strategies – hands-on experiments and observation, learning outdoors, picture-supported vocabulary of scientific words, simple tables and charts built together in class, "I predict… because…" sentence frames – group work and a suggested timetable, and reinforcement of mastered skills)',
+    gapEx:' (cumulative gap, e.g. reading tables and graphs or explaining in writing)',
+    lowTreat:'(a remedial plan with hands-on activities and scientific vocabulary)',
+    topEnrich:'(small inquiry projects, enrichment and peer tutoring)',
+    team:'for the school\'s science staff',
+    mgmt:'and for the school management and for parents (simple home experiments and nature observation)'
+  },
+  math:{
+    expert:'an expert in pedagogical assessment and educational data analysis, specialising in teaching mathematics in elementary schools (grades ג–ו) in Arab schools in Israel, and familiar with the elementary mathematics curriculum, the מיצ"ב tests, school exams, and the mathematical thinking skills tested at this age',
+    skills:`2) Classify every question on two dimensions, as is customary in the מיצ"ב and Ministry of Education mathematics tests for elementary school, and according to each grade's curriculum (use the Hebrew terms in the outputs):
+
+   Dimension 1 – content domain and topic:
+   • Numbers and place value (מספרים ומבנה עשרוני): reading, writing and comparing numbers, place value, rounding and estimation.
+   • Operations (פעולות חשבון): addition and subtraction, multiplication table, long multiplication and division, order of operations, mental math strategies, divisibility.
+   • Fractions and decimals (שברים ושברים עשרוניים): meaning of a fraction, equivalent fractions, comparing, adding and subtracting fractions, mixed numbers, decimals, first percentages (grade ו).
+   • Measurement (מדידה): length, weight, capacity, time and money; units and conversions; perimeter and area of rectangles and squares.
+   • Geometry (גאומטריה): angles (acute, right, obtuse), triangles and quadrilaterals and their properties, parallel and perpendicular lines, symmetry, solids and nets.
+   • Data (נתונים): reading and building tables and bar charts, the mean (grade ו).
+   • Word problems (בעיות מילוליות) in all domains.
+
+   Dimension 2 – thinking level (also use the Bloom level already in the file to decide):
+   • Knowledge and procedures (ידע וביצוע): facts, concepts and familiar calculations.
+   • Understanding and application (הבנה ויישום): applying knowledge in a familiar situation, one- or two-step problems, moving between representations.
+   • Mathematical thinking and problem solving (חשיבה מתמטית ופתרון בעיות): multi-step or new problems, explaining and justifying, checking a solution.
+
+3) For each grade, build a table linking: question number ← its topic as in the file ← its Bloom level as in the file ← content domain ← topic ← thinking level ← maximum score.
+
+4) Always keep the topic as written in the file and add the matching classification from the list above next to it. If a classification is unclear or fits more than one category, choose the most suitable one and justify it briefly, without stopping.`,
+    causeEx:', and explain pedagogically the likely cause of difficulty (e.g. a gap in place value or number sense, an algorithmic error, a gap in the multiplication table, difficulty reading the word problem, or difficulty with the meaning of a fraction).',
+    skillExtra:'   - Compare the thinking levels (knowledge and procedures ← understanding and application ← mathematical thinking) and state at which level achievement starts to drop.',
+    recos:'for the teacher (a support plan for every weak topic with age-appropriate strategies – concrete materials and manipulatives (blocks, fraction strips, number line), drawings and models before the algorithm, short daily mental-math practice, math games, and the "what is given – what is asked – what is the way" strategy for word problems – group work and a suggested timetable, and reinforcement of mastered topics)',
+    gapEx:' (cumulative gap, e.g. place value, the multiplication table or the meaning of a fraction, which affect everything that follows)',
+    lowTreat:'(a remedial plan in foundation topics with concrete materials, in short frequent sessions)',
+    topEnrich:'(challenge problems, math games and peer tutoring)',
+    team:'for the school\'s mathematics staff',
+    mgmt:'and for the school management and for parents (math games and everyday counting and measuring at home)'
+  }
+};
+
 function buildClaudeReportPrompt({analytics,subject,teacher}){
-  const S=REPORT_SUBJECTS[subject]||REPORT_SUBJECTS.arabic;
+  const STAGE=detectStage(teacher,(analytics.classes||[]).map(c=>c.name));
+  const S0=REPORT_SUBJECTS[subject]||REPORT_SUBJECTS.arabic;
+  const S=STAGE==='elem'?{...S0,...(REPORT_ELEM[subject]||{})}:S0;
   const AR=S.out==='ar', OUT=AR?'Arabic':'Hebrew';
   const B=analytics.bands||[], nb=B.length, n=analytics.totalStudents||0;
   const nm=(i)=>`"${B[i].name}" (${bandRangeLabel(B,i)})`;
@@ -1937,7 +2079,7 @@ ${RULE}
   • Ignore hidden sheets.
 - A student whose row is completely empty was absent: do not count them.
 
-Grade levels: the classes are grouped into grade levels by the grade part of the sheet name (e.g. "ז A", "ז B" and "ז1" all belong to grade ז; ז = 7th, ח = 8th, ט = 9th). Grouping detected from the sheet names:
+Grade levels: the classes are grouped into grade levels by the grade part of the sheet name (${STAGE==='elem'?'e.g. "ה A", "ה B" and "ה1" all belong to grade ה; ד = 4th, ה = 5th, ו = 6th; in Arabic رابع = 4th, خامس = 5th, سادس = 6th':'e.g. "ז A", "ז B" and "ז1" all belong to grade ז; ז = 7th, ח = 8th, ט = 9th'}). Grouping detected from the sheet names:
 ${gradeLines||'   • (determine the grouping from the sheet names)'}
 Verify this grouping against the sheet contents (titles, question structure); if it is wrong, correct it and record the correction in "${S.notes}".
 ${multi?`- This file contains ${groups.length} grade levels. Run the FULL analysis below separately for each grade level (its own classes, skills, distribution, support lists and charts), and then add a comparison between the grade levels (section B.6).`:'- This file contains one grade level. Run the analysis for it and compare its classes. Skip the between-grades comparison.'}
@@ -1996,7 +2138,7 @@ ${nb>1?`     • Students in the range ${low2} (support and follow-up).\n`:''}  
 
 7) Insights and recommendations:
    - Extract the main insights for every class and every grade level.
-   - Write practical recommendations suited to each grade level and to teaching ${S.subj}: ${S.recos}; for students in the range ${low} ${S.lowTreat||'(a remedial plan)'}; for excelling students ${S.topEnrich||'(enrichment and peer tutoring)'}; ${S.team} (if the file covers more than one grade); and for the school management and parents.
+   - Write practical recommendations suited to each grade level and to teaching ${S.subj}: ${S.recos}; for students in the range ${low} ${S.lowTreat||'(a remedial plan)'}; for excelling students ${S.topEnrich||'(enrichment and peer tutoring)'}; ${S.team} (if the file covers more than one grade); ${S.mgmt||'and for the school management and parents'}.
 
 ${RULE}
 C. Use of colour
